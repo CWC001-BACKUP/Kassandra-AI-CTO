@@ -7,7 +7,7 @@ import { buttonClasses } from '../../components/ui/buttonStyles'
 import { glassFieldClass, glassFieldDefaultClass } from '../../components/ui/surfaceStyles'
 import { ChatTypingIndicator } from '../../components/ui/ChatTypingIndicator'
 import { LoadingState } from '../../components/ui/LoadingState'
-import { chatApi, projectsApi } from '../../services/api'
+import { chatApi, dashboardApi, projectsApi } from '../../services/api'
 import { ApiError } from '../../services/api'
 import type { ChatMessage } from '../../types'
 
@@ -70,6 +70,12 @@ export function ChatPage() {
     queryKey: ['projects'],
     queryFn: projectsApi.list,
   })
+
+  const statsQuery = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: dashboardApi.stats,
+  })
+  const gapCount = statsQuery.data?.knowledge_gap_count ?? 0
 
   const projects = projectsQuery.data ?? []
   const selectedProject =
@@ -184,19 +190,32 @@ export function ChatPage() {
     if (createSessionMutation.isPending || loadSessionMutation.isPending) return
     if (bootstrapStartedRef.current) return
     if (!sessionsQuery.isFetched) return
+    if (projectsQuery.isLoading) return
+    // Wait until default repo selection runs when the user has projects.
+    if (projects.length > 0 && !selectedProjectId) return
 
     const sessions = sessionsQuery.data ?? []
+    const projectId = selectedProjectId
+
+    if (projectId) {
+      const match = sessions.find((s) => s.project_id === projectId)
+      bootstrapStartedRef.current = true
+      if (match) {
+        loadSession(match.id)
+      } else {
+        createSession(projectId)
+      }
+      return
+    }
+
     if (sessions.length > 0) {
       bootstrapStartedRef.current = true
       loadSession(sessions[0].id)
       return
     }
 
-    if (projectsQuery.isLoading) return
-    if (projects.length > 0 && !selectedProjectId) return
-
     bootstrapStartedRef.current = true
-    createSession(selectedProjectId)
+    createSession(null)
   }, [
     bootstrapBlocked,
     sessionId,
@@ -394,106 +413,114 @@ export function ChatPage() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="border-b border-[var(--color-border-subtle)] px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex min-w-0 items-start gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="shrink-0 lg:hidden"
-                onClick={() => setSessionsOpen(true)}
-              >
-                Chats
-              </Button>
-              <div className="min-w-0">
-              <h1 className="font-display text-lg font-bold sm:text-xl lg:text-2xl">AI CTO Chat</h1>
-              <p className="mt-1 text-xs text-[var(--color-text-muted)] sm:text-sm">
-                GitHub evidence plus Sibyl institutional memory — kept separate by design
+        <div className="border-b border-[var(--color-border-subtle)] px-3 py-2 sm:px-4">
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="shrink-0 px-2 lg:hidden"
+              onClick={() => setSessionsOpen(true)}
+              aria-label="Open chat list"
+            >
+              Chats
+            </Button>
+
+            {projects.length === 0 ? (
+              <p className="min-w-0 flex-1 truncate text-sm text-[var(--color-text-dim)]">
+                No projects —{' '}
+                <Link to="/dashboard/projects" className="text-[var(--color-cyan)] hover:underline">
+                  add a repo
+                </Link>
               </p>
-              </div>
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-              {projects.length === 0 ? (
-                <p className="text-xs text-[var(--color-text-dim)] sm:text-sm">
-                  No projects —{' '}
-                  <Link to="/dashboard/projects" className="text-[var(--color-cyan)] hover:underline">
-                    add a repo
-                  </Link>
-                </p>
-              ) : (
-                <div className="flex min-w-0 max-w-full flex-col gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={toggleCompareMode}
-                      className={`btn-glass btn-glass-sm ${
-                        compareMode ? 'btn-glass-toggle-active' : 'btn-glass-toggle-inactive'
-                      }`}
-                    >
-                      Compare repos
-                    </button>
-                    {compareMode && compareProjectIds.length >= 2 && (
-                      <span className="text-[10px] text-[var(--color-cyan)] sm:text-xs">
-                        {compareProjectIds.length} repos selected
-                      </span>
-                    )}
-                  </div>
-                  {compareMode ? (
-                    <div className="glass-panel max-h-32 space-y-1 overflow-y-auto p-2 sm:max-h-40">
-                      {projects.map((project) => {
-                        const checked = compareProjectIds.includes(project.id)
-                        return (
-                          <label
-                            key={project.id}
-                            className="flex cursor-pointer items-center gap-2 px-1 py-1 text-xs sm:text-sm"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleCompareProject(project.id)}
-                              className="accent-[var(--color-cyan)]"
-                            />
-                            <span className="min-w-0 truncate">{project.repo_full_name}</span>
-                          </label>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <label className="flex min-w-0 max-w-full flex-col gap-1">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-dim)]">
-                        Repository
-                      </span>
-                      <select
-                        value={selectedProjectId ?? selectedProject?.id ?? ''}
-                        onChange={(e) => handleRepoChange(e.target.value)}
-                        disabled={createSessionMutation.isPending}
-                        className={`${glassFieldClass} ${glassFieldDefaultClass} min-w-0 max-w-full py-2 text-xs sm:max-w-xs sm:text-sm`}
-                        aria-label="Select repository for this chat"
-                      >
-                        {projects.map((project) => (
-                          <option key={project.id} value={project.id}>
-                            {project.repo_full_name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+            ) : compareMode ? (
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-sm text-[var(--color-text-muted)]">Compare</span>
+                  {compareProjectIds.length >= 2 && (
+                    <span className="text-xs text-[var(--color-cyan)]">
+                      {compareProjectIds.length} selected
+                    </span>
                   )}
                 </div>
+                <div className="mt-1.5 max-h-28 space-y-0.5 overflow-y-auto rounded-md border border-[var(--color-border-subtle)] bg-[var(--color-bg)]/40 px-2 py-1.5">
+                  {projects.map((project) => {
+                    const checked = compareProjectIds.includes(project.id)
+                    return (
+                      <label
+                        key={project.id}
+                        className="flex cursor-pointer items-center gap-2 py-0.5 text-xs sm:text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCompareProject(project.id)}
+                          className="accent-[var(--color-cyan)]"
+                        />
+                        <span className="min-w-0 truncate">{project.repo_full_name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <select
+                value={selectedProjectId ?? selectedProject?.id ?? ''}
+                onChange={(e) => handleRepoChange(e.target.value)}
+                disabled={createSessionMutation.isPending}
+                className={`${glassFieldClass} ${glassFieldDefaultClass} min-w-0 flex-1 truncate border-0 bg-transparent py-1.5 pl-1 pr-6 text-sm font-medium sm:max-w-md`}
+                aria-label="Select repository for this chat"
+              >
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.repo_full_name}
+                  </option>
+                ))}
+              </select>
+            )}
+
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <Link
+                to="/dashboard/teach"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-cyan)]"
+                title="Teach Kassandra"
+              >
+                Teach
+                {gapCount > 0 && (
+                  <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--color-warning)]/20 px-1 text-[10px] font-semibold text-[var(--color-warning)]">
+                    {gapCount > 99 ? '99+' : gapCount}
+                  </span>
+                )}
+              </Link>
+              {projects.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleCompareMode}
+                  title="Compare repositories"
+                  className={`rounded-md px-2 py-1 text-xs ${
+                    compareMode
+                      ? 'bg-[var(--color-cyan)]/15 text-[var(--color-cyan)]'
+                      : 'text-[var(--color-text-muted)] hover:bg-white/5 hover:text-[var(--color-text)]'
+                  }`}
+                >
+                  Compare
+                </button>
               )}
               <button
                 type="button"
                 onClick={toggleSibyl}
                 title={
                   sibylEnabled
-                    ? 'Sibyl memory is on — load-bearing institutional memory from the Sibyl layer'
-                    : 'Sibyl memory is off — answers use GitHub evidence only'
+                    ? 'Sibyl memory is on'
+                    : 'Sibyl memory is off — GitHub evidence only'
                 }
-                className={`btn-glass btn-glass-sm ${
-                  sibylEnabled ? 'btn-glass-toggle-active' : 'btn-glass-toggle-inactive'
-                } ${!sibylEnabled ? 'line-through' : ''}`}
+                className={`rounded-md px-2 py-1 text-xs ${
+                  sibylEnabled
+                    ? 'bg-[var(--color-cyan)]/15 text-[var(--color-cyan)]'
+                    : 'text-[var(--color-text-dim)] line-through hover:bg-white/5'
+                }`}
               >
-                Sibyl {sibylEnabled ? 'On' : 'Off'}
+                Sibyl
               </button>
             </div>
           </div>

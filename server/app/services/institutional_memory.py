@@ -18,6 +18,17 @@ from app.services.memory import get_memory_provider
 logger = logging.getLogger(__name__)
 
 Confidence = Literal["observed", "inferred", "confirmed"]
+EvidenceType = Literal["OBSERVED", "CONFIRMED", "INFERRED", "UNKNOWN"]
+MemoryStatus = Literal[
+    "ACTIVE",
+    "PENDING_CONFIRMATION",
+    "VERIFIED",
+    "REJECTED",
+    "INTENTIONAL_TECH_DEBT",
+    "DEPRECATED",
+    "stored",
+]
+Lifecycle = Literal["CURRENT", "HISTORICAL", "PLANNED", "DEPRECATED", "UNKNOWN"]
 MemoryType = Literal[
     "observation",
     "architectural_decision",
@@ -36,6 +47,8 @@ BOOTSTRAP_REF = "bootstrap_summary"
 INDEX_REF = "institutional_index"
 
 VALID_CONFIDENCE = frozenset({"observed", "inferred", "confirmed"})
+VALID_EVIDENCE_TYPES = frozenset({"OBSERVED", "CONFIRMED", "INFERRED", "UNKNOWN"})
+VALID_LIFECYCLES = frozenset({"CURRENT", "HISTORICAL", "PLANNED", "DEPRECATED", "UNKNOWN"})
 VALID_TYPES = frozenset(
     {
         "observation",
@@ -49,6 +62,12 @@ VALID_TYPES = frozenset(
         "incident",
     }
 )
+
+_CONFIDENCE_TO_EVIDENCE: dict[str, EvidenceType] = {
+    "observed": "OBSERVED",
+    "confirmed": "CONFIRMED",
+    "inferred": "INFERRED",
+}
 
 SOURCE_GITHUB = "github"
 SOURCE_COMMIT = "commit"
@@ -75,9 +94,42 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def _fingerprint(title: str, decision: str | None, content: str | None) -> str:
-    raw = f"{title.strip().lower()}|{(decision or '').strip().lower()}|{(content or '')[:200].strip().lower()}"
+def _normalize_for_fingerprint(text: str) -> str:
+    cleaned = re.sub(r"[^\w\s]", " ", (text or "").lower())
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    # Drop question-shaped noise so gap prompts don't dominate identity
+    cleaned = re.sub(
+        r"^(what|why|how|which|when|where|who|are there|is there|do we|did we)\b\s*",
+        "",
+        cleaned,
+    )
+    return cleaned
+
+
+def _fingerprint(
+    title: str,
+    decision: str | None,
+    content: str | None,
+    reason: str | None = None,
+) -> str:
+    """Fingerprint knowledge (decision/reason), not the trigger question."""
+    knowledge = _normalize_for_fingerprint(decision or title or "")
+    why = _normalize_for_fingerprint(reason or "")
+    body = _normalize_for_fingerprint((content or "")[:240])
+    raw = f"{knowledge}|{why}|{body[:120]}"
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _token_set(text: str) -> set[str]:
+    return {t for t in _normalize_for_fingerprint(text).split() if len(t) > 2}
+
+
+def semantic_overlap(a: str, b: str) -> float:
+    """Jaccard overlap of significant tokens; 1.0 = identical token sets."""
+    ta, tb = _token_set(a), _token_set(b)
+    if not ta or not tb:
+        return 0.0
+    return len(ta & tb) / len(ta | tb)
 
 
 def build_memory(
@@ -89,9 +141,11 @@ def build_memory(
     reason: str | None = None,
     alternatives: list[str] | None = None,
     outcome: str | None = None,
+    context: str | None = None,
     source: str,
     source_reference: str | None = None,
     confidence: Confidence,
+    evidence_type: EvidenceType | None = None,
     project_id: str | None = None,
     historical_date: str | None = None,
     affected_components: list[str] | None = None,
@@ -101,29 +155,49 @@ def build_memory(
     tags: list[str] | None = None,
     priority: str | None = None,
     question: str | None = None,
+    trigger_question: str | None = None,
+    status: str | None = None,
+    lifecycle: Lifecycle | None = None,
     memory_id: str | None = None,
 ) -> dict[str, Any]:
-    """Build a structured institutional memory object (section 10 of the bootstrap spec)."""
+    """Build a structured institutional memory object (knowledge, not the prompt)."""
     if confidence not in VALID_CONFIDENCE:
         raise ValueError(f"Invalid confidence: {confidence}")
     if memory_type not in VALID_TYPES:
         raise ValueError(f"Invalid memory type: {memory_type}")
 
+    ev = evidence_type or _CONFIDENCE_TO_EVIDENCE.get(confidence, "UNKNOWN")
+    if ev not in VALID_EVIDENCE_TYPES:
+        raise ValueError(f"Invalid evidence_type: {ev}")
+    life = lifecycle or "CURRENT"
+    if life not in VALID_LIFECYCLES:
+        raise ValueError(f"Invalid lifecycle: {life}")
+
     mid = memory_id or uuid4().hex
     now = _now_iso()
+    trigger = (trigger_question or question or "").strip() or None
+    decision_clean = (decision or "").strip() or None
+    title_clean = title.strip()
+    # Never let a raw interrogative become the permanent title when we have a decision
+    if decision_clean and title_clean.rstrip().endswith("?"):
+        title_clean = decision_clean[:160]
     return {
         "memory_id": mid,
         "project_id": project_id,
         "type": memory_type,
-        "title": title.strip(),
+        "title": title_clean,
         "content": (content or "").strip() or None,
-        "decision": (decision or "").strip() or None,
+        "decision": decision_clean,
         "reason": (reason or "").strip() or None,
+        "context": (context or "").strip() or None,
         "alternatives": alternatives or [],
         "outcome": (outcome or "").strip() or None,
         "source": source,
         "source_reference": source_reference,
         "confidence": confidence,
+        "evidence_type": ev,
+        "status": status or "ACTIVE",
+        "lifecycle": life,
         "created_at": now,
         "updated_at": now,
         "historical_date": historical_date,
@@ -133,25 +207,36 @@ def build_memory(
         "related_prs": related_prs or [],
         "tags": tags or [],
         "priority": priority,
-        "question": (question or "").strip() or None,
-        "fingerprint": _fingerprint(title, decision, content),
+        "question": trigger,
+        "trigger_question": trigger,
+        "fingerprint": _fingerprint(title_clean, decision_clean, content, reason),
     }
 
 
 def format_memory_line(memory: dict[str, Any]) -> str:
     """Plain-text line for LLM context with explicit provenance."""
     conf = str(memory.get("confidence") or "unknown").upper()
+    ev = str(memory.get("evidence_type") or conf)
     mtype = str(memory.get("type") or "memory").replace("_", " ")
     title = memory.get("title") or "Untitled"
-    parts = [f"[{conf}/{mtype}] {title}"]
+    life = memory.get("lifecycle")
+    parts = [f"[{ev}/{mtype}] {title}"]
+    if life and life != "CURRENT":
+        parts.append(f"Lifecycle: {life}")
     if memory.get("decision"):
         parts.append(f"Decision: {memory['decision']}")
     if memory.get("reason"):
         parts.append(f"Reason: {memory['reason']}")
+    if memory.get("context"):
+        parts.append(f"Context: {memory['context']}")
     if memory.get("content") and memory.get("content") != memory.get("decision"):
         parts.append(str(memory["content"]))
-    if memory.get("question"):
-        parts.append(f"Gap: {memory['question']}")
+    if memory.get("trigger_question") or memory.get("question"):
+        parts.append(
+            f"Trigger: {memory.get('trigger_question') or memory.get('question')}"
+        )
+    if memory.get("status") == "INTENTIONAL_TECH_DEBT":
+        parts.append("Status: INTENTIONAL_TECH_DEBT")
     src = memory.get("source") or "unknown"
     parts.append(f"Source: {src}")
     if memory.get("source_reference"):
@@ -201,11 +286,12 @@ def _save_index(tenant_id: str, index: dict[str, Any]) -> None:
 
 
 def find_duplicate(tenant_id: str, candidate: dict[str, Any]) -> dict[str, Any] | None:
-    """Return an existing memory with the same semantic fingerprint, if any."""
+    """Return an existing memory with the same or near-identical knowledge, if any."""
     fp = candidate.get("fingerprint") or _fingerprint(
         str(candidate.get("title") or ""),
         candidate.get("decision"),
         candidate.get("content"),
+        candidate.get("reason"),
     )
     provider = get_memory_provider(tenant_id)
     index = _load_index(tenant_id)
@@ -220,6 +306,16 @@ def find_duplicate(tenant_id: str, candidate: dict[str, Any]) -> dict[str, Any] 
                 if mem:
                     return mem
 
+    cand_knowledge = " ".join(
+        filter(
+            None,
+            [
+                str(candidate.get("decision") or ""),
+                str(candidate.get("title") or ""),
+                str(candidate.get("reason") or ""),
+            ],
+        )
+    )
     for item in list_memories(tenant_id):
         if item.get("fingerprint") == fp:
             return item
@@ -229,6 +325,25 @@ def find_duplicate(tenant_id: str, candidate: dict[str, Any]) -> dict[str, Any] 
             and (item.get("question") or item.get("title") or "").strip().lower()
             == (candidate.get("question") or candidate.get("title") or "").strip().lower()
         ):
+            return item
+        # Near-duplicate institutional facts (paraphrases of the same decision)
+        if item.get("type") == "knowledge_gap" or candidate.get("type") == "knowledge_gap":
+            continue
+        if item.get("confidence") != candidate.get("confidence") and not (
+            candidate.get("confidence") == "confirmed"
+        ):
+            continue
+        other_knowledge = " ".join(
+            filter(
+                None,
+                [
+                    str(item.get("decision") or ""),
+                    str(item.get("title") or ""),
+                    str(item.get("reason") or ""),
+                ],
+            )
+        )
+        if semantic_overlap(cand_knowledge, other_knowledge) >= 0.72:
             return item
     return None
 
@@ -272,6 +387,13 @@ def resolve_knowledge_gap(
             match = True
         if q_norm and mq == q_norm:
             match = True
+        # Truncated titles / leading-prefix matches (UI often shortens gap questions)
+        if q_norm and mq and not match:
+            shorter, longer = (q_norm, mq) if len(q_norm) <= len(mq) else (mq, q_norm)
+            if len(shorter) >= 24 and longer.startswith(shorter.rstrip(".")):
+                match = True
+            elif semantic_overlap(q_norm, mq) >= 0.85:
+                match = True
         if not match:
             continue
         key = name or mem.get("sibyl_key")
@@ -283,6 +405,13 @@ def resolve_knowledge_gap(
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to forget gap %s: %s", key, exc)
 
+    if (mid_norm or q_norm) and removed == 0:
+        logger.info(
+            "resolve_knowledge_gap: no matching gap for tenant=%s id=%s question=%r",
+            tenant_id,
+            mid_norm or None,
+            (question or "")[:120],
+        )
     return removed
 
 
@@ -514,6 +643,176 @@ def get_bootstrap_summary(tenant_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _memory_card(m: dict[str, Any]) -> dict[str, Any]:
+    """Compact card payload for interactive review UI."""
+    return {
+        "memory_id": m.get("memory_id"),
+        "sibyl_key": m.get("sibyl_key"),
+        "type": m.get("type"),
+        "title": m.get("title"),
+        "content": m.get("content"),
+        "decision": m.get("decision"),
+        "reason": m.get("reason"),
+        "context": m.get("context"),
+        "outcome": m.get("outcome"),
+        "alternatives": m.get("alternatives") or [],
+        "confidence": m.get("confidence"),
+        "evidence_type": m.get("evidence_type"),
+        "lifecycle": m.get("lifecycle"),
+        "source": m.get("source"),
+        "source_reference": m.get("source_reference"),
+        "status": m.get("status") or "ACTIVE",
+        "priority": m.get("priority"),
+        "question": m.get("question"),
+        "trigger_question": m.get("trigger_question") or m.get("question"),
+        "affected_components": m.get("affected_components") or [],
+        "tags": m.get("tags") or [],
+        "historical_date": m.get("historical_date"),
+        "related_commits": m.get("related_commits") or [],
+        "related_prs": m.get("related_prs") or [],
+        "updated_at": m.get("updated_at"),
+        "confirmed_at": m.get("confirmed_at"),
+    }
+
+
+def review_memory(
+    tenant_id: str,
+    memory_id: str,
+    *,
+    action: str,
+    note: str | None = None,
+    developer_name: str | None = None,
+) -> dict[str, Any]:
+    """Human verify an observed/inferred fact: confirm, reject, or correct."""
+    action = (action or "").strip().lower()
+    if action not in {"confirm", "reject", "correct"}:
+        return {"ok": False, "reason": "action must be confirm, reject, or correct"}
+
+    provider = get_memory_provider(tenant_id)
+    target: dict[str, Any] | None = None
+    category = CATEGORY
+    key: str | None = None
+
+    for cat in (CATEGORY, GAPS_CATEGORY):
+        try:
+            raw_list = provider.list(cat, limit=300) or []
+        except Exception:  # noqa: BLE001
+            continue
+        for item in raw_list:
+            if not isinstance(item, dict):
+                continue
+            name = item.get("name") or item.get("key")
+            mem = _normalize_listed(item)
+            if not mem and name:
+                recalled = provider.recall(cat, str(name))
+                if isinstance(recalled, dict):
+                    mem = _normalize_listed(recalled) or (
+                        recalled if recalled.get("memory_id") else None
+                    )
+            if not mem:
+                continue
+            if str(mem.get("memory_id") or "") != memory_id:
+                continue
+            target = mem
+            category = cat
+            key = str(name or mem.get("sibyl_key") or "")
+            break
+        if target:
+            break
+
+    if not target or not key:
+        return {"ok": False, "reason": "Memory not found in Sibyl"}
+
+    developer_label = developer_source_label(developer_name)
+    now = _now_iso()
+
+    if action == "confirm":
+        target["confidence"] = "confirmed"
+        target["status"] = "stored"
+        target["confirmed_at"] = now
+        target["updated_at"] = now
+        target["source"] = developer_label
+        target["source_reference"] = target.get("source_reference") or "Human fact review"
+        if note:
+            target["content"] = (
+                f"{target.get('content') or ''}\n\nHuman confirmation note: {note.strip()}"
+            ).strip()[:2000]
+        tags = list(target.get("tags") or [])
+        if "human_verified" not in tags:
+            tags.append("human_verified")
+        target["tags"] = tags
+        provider.remember(category, key, target)
+        return {"ok": True, "action": action, "memory": _memory_card(target)}
+
+    if action == "reject":
+        target["status"] = "rejected"
+        target["updated_at"] = now
+        target["confidence"] = target.get("confidence") or "observed"
+        reject_note = note.strip() if note else "Marked false by developer"
+        target["content"] = (
+            f"{target.get('content') or ''}\n\nRejected: {reject_note}"
+        ).strip()[:2000]
+        tags = list(target.get("tags") or [])
+        if "human_rejected" not in tags:
+            tags.append("human_rejected")
+        target["tags"] = tags
+        provider.remember(category, key, target)
+        # Also store a short correction so chat can see it was rejected
+        store_memory(
+            tenant_id,
+            build_memory(
+                memory_type="observation",
+                title=f"Rejected: {target.get('title') or 'fact'}",
+                content=f"Developer marked this as false. {reject_note}",
+                decision=f"Not accurate: {target.get('title')}",
+                reason=reject_note,
+                source=developer_label,
+                source_reference=memory_id,
+                confidence="confirmed",
+                project_id=target.get("project_id"),
+                tags=["human_rejected", "correction"],
+                affected_components=list(target.get("affected_components") or []),
+            ),
+            skip_duplicate_check=True,
+        )
+        return {"ok": True, "action": action, "memory": _memory_card(target)}
+
+    # correct
+    if not note or len(note.strip()) < 4:
+        return {"ok": False, "reason": "Correction note is required"}
+    target["status"] = "superseded"
+    target["updated_at"] = now
+    tags = list(target.get("tags") or [])
+    if "human_corrected" not in tags:
+        tags.append("human_corrected")
+    target["tags"] = tags
+    target["content"] = (
+        f"{target.get('content') or ''}\n\nSuperseded correction: {note.strip()}"
+    ).strip()[:2000]
+    provider.remember(category, key, target)
+
+    corrected = build_memory(
+        memory_type=target.get("type") or "observation",
+        title=str(target.get("title") or "Corrected fact")[:160],
+        content=note.strip()[:2000],
+        decision=note.strip()[:200],
+        reason=f"Corrects prior memory {memory_id}",
+        source=developer_label,
+        source_reference=memory_id,
+        confidence="confirmed",
+        project_id=target.get("project_id"),
+        affected_components=list(target.get("affected_components") or []),
+        tags=["human_corrected", "correction", "human_verified"],
+    )
+    stored = store_memory(tenant_id, corrected, skip_duplicate_check=True)
+    return {
+        "ok": True,
+        "action": action,
+        "memory": _memory_card(target),
+        "correction": _memory_card(stored),
+    }
+
+
 def build_understanding_report(tenant_id: str, repo_full_name: str) -> dict[str, Any]:
     """Assemble the bootstrap summary UI payload (section 17)."""
     cached = get_bootstrap_summary(tenant_id)
@@ -521,14 +820,19 @@ def build_understanding_report(tenant_id: str, repo_full_name: str) -> dict[str,
     gaps = dedupe_gaps_by_question(
         [m for m in memories if m.get("type") == "knowledge_gap"]
     )
-    observations = [m for m in memories if m.get("confidence") == "observed" and m.get("type") != "knowledge_gap"]
-    inferred = [m for m in memories if m.get("confidence") == "inferred"]
-    confirmed = [m for m in memories if m.get("confidence") == "confirmed"]
+    # Exclude rejected from "known" counts shown as active facts
+    active = [m for m in memories if (m.get("status") or "stored") != "rejected"]
+    observations = [
+        m
+        for m in active
+        if m.get("confidence") == "observed" and m.get("type") != "knowledge_gap"
+    ]
+    inferred = [m for m in active if m.get("confidence") == "inferred"]
+    confirmed = [m for m in active if m.get("confidence") == "confirmed"]
 
-    # Dedupe architecture rows by title (re-analyze can leave near-duplicates)
     architecture_items: list[dict[str, Any]] = []
     seen_arch: set[str] = set()
-    for m in memories:
+    for m in active:
         if m.get("type") != "observation" or "architecture" not in (m.get("tags") or []):
             continue
         title = (m.get("title") or "").strip().lower()
@@ -539,43 +843,55 @@ def build_understanding_report(tenant_id: str, repo_full_name: str) -> dict[str,
 
     evolution_items = [
         m
-        for m in memories
+        for m in active
         if m.get("type") in {"historical_event", "architectural_decision", "inference"}
         and m.get("type") != "knowledge_gap"
     ]
+
+    problems = [
+        m
+        for m in active
+        if m.get("type") in {"conflict", "drift", "incident"}
+        or "incident" in (m.get("tags") or [])
+        or "conflict" in (m.get("tags") or [])
+    ]
+
+    # Reviewable facts = observed + inferred that aren't gaps and aren't already human-verified
+    reviewable = []
+    seen_ids: set[str] = set()
+    for m in observations + inferred + evolution_items:
+        mid = str(m.get("memory_id") or "")
+        if not mid or mid in seen_ids:
+            continue
+        if m.get("type") == "knowledge_gap":
+            continue
+        if (m.get("status") or "") == "rejected":
+            continue
+        seen_ids.add(mid)
+        reviewable.append(m)
 
     high_gaps = [g for g in gaps if (g.get("priority") or "").lower() == "high"]
 
     report = {
         "repo_full_name": repo_full_name,
         "headline": (
-            "I don't need you to explain the repository. "
-            "I only need the context that the repository cannot tell me."
+            "Review what Kassandra learned from the repo, answer open questions, "
+            "and add anything the code cannot explain."
         ),
-        "architecture": [
-            {
-                "title": m.get("title"),
-                "content": m.get("content") or m.get("decision"),
-                "confidence": m.get("confidence"),
-            }
-            for m in architecture_items[:20]
-        ],
-        "historical_evolution": [
-            {
-                "title": m.get("title"),
-                "decision": m.get("decision"),
-                "reason": m.get("reason"),
-                "confidence": m.get("confidence"),
-                "source": m.get("source"),
-            }
-            for m in evolution_items[:20]
-        ],
+        "architecture": [_memory_card(m) for m in architecture_items],
+        "historical_evolution": [_memory_card(m) for m in evolution_items],
+        "problems": [_memory_card(m) for m in problems],
+        "inferred": [_memory_card(m) for m in inferred],
+        "confirmed": [_memory_card(m) for m in confirmed if "human_rejected" not in (m.get("tags") or [])],
+        "reviewable_facts": [_memory_card(m) for m in reviewable],
         "counts": {
             "observed": len(observations),
             "inferred": len(inferred),
             "confirmed": len(confirmed),
             "knowledge_gaps": len(gaps),
             "high_priority_gaps": len(high_gaps),
+            "problems": len(problems),
+            "reviewable": len(reviewable),
         },
         "knowledge_gaps": [
             {
@@ -590,7 +906,7 @@ def build_understanding_report(tenant_id: str, repo_full_name: str) -> dict[str,
                 key=lambda x: {"high": 0, "medium": 1, "low": 2}.get(
                     str(x.get("priority") or "medium").lower(), 9
                 ),
-            )[:12]
+            )
         ],
         "confidence_areas": (cached or {}).get("confidence_areas")
         or {
@@ -601,12 +917,20 @@ def build_understanding_report(tenant_id: str, repo_full_name: str) -> dict[str,
             else ("unknown" if high_gaps else "low"),
         },
         "interview_intro": (
-            f"I've analyzed your repository.\n\n"
-            f"I understand most of the current architecture and a portion of its evolution.\n\n"
-            f"I found {len(high_gaps) or len(gaps)} area(s) where the repository cannot "
-            f"reliably tell me WHY certain decisions were made."
-            if gaps
-            else "I've analyzed your repository. No high-value knowledge gaps were flagged yet."
+            (
+                f"I've reviewed {repo_full_name} from the repository itself.\n\n"
+                f"What I already know: {len(observations)} facts from the code and history"
+                + (f", plus {len(inferred)} inferred notes" if inferred else "")
+                + (f", and {len(confirmed)} confirmed by you" if confirmed else "")
+                + ".\n\n"
+                + (
+                    f"What I still need from you: {len(gaps)} question"
+                    f"{'' if len(gaps) == 1 else 's'} about why certain decisions were made "
+                    f"— the repo cannot answer those reliably."
+                    if gaps
+                    else "I don't have open questions right now. You can still teach me extra context anytime."
+                )
+            )
         ),
         "updated_at": (cached or {}).get("updated_at") or _now_iso(),
     }

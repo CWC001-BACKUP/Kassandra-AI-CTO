@@ -77,22 +77,59 @@ def _matches_any(text: str, patterns: tuple[str, ...]) -> bool:
     return any(re.search(p, text) for p in patterns)
 
 
-def _greeting_response(user_name: str | None = None) -> str:
-    return get_welcome_message(user_name)
-
-
-def get_welcome_message(user_name: str | None = None) -> str:
+def get_welcome_message(
+    user_name: str | None = None,
+    *,
+    repo_full_name: str | None = None,
+    gap_count: int = 0,
+) -> str:
     greeting = f"Hello, {user_name}." if user_name else "Hello."
+
+    if not repo_full_name:
+        return (
+            f"{greeting} I'm Kassandra, your AI CTO.\n\n"
+            "No repository is connected yet.\n\n"
+            "Connect a GitHub repository under Projects and I'll reconstruct its architecture "
+            "into Sibyl, then ask only for the institutional WHY the repo cannot provide.\n\n"
+            "After that you can:\n"
+            "• Ask about stack, changes, and decisions here in Chat\n"
+            "• Open Teach Kassandra to fill knowledge gaps"
+        )
+
+    gap_line = ""
+    if gap_count > 0:
+        gap_line = (
+            f"\n\nI still have {gap_count} knowledge gap"
+            f"{'s' if gap_count != 1 else ''} for {repo_full_name}. "
+            "Open Teach Kassandra to answer them, or tell me the WHY here in chat "
+            "and I'll ask before saving to Sibyl."
+        )
+
     return (
         f"{greeting} I'm Kassandra, your AI CTO.\n\n"
-        "Connect a GitHub repository and I'll understand its current architecture "
-        "while preserving the engineering decisions, incidents, and context behind it.\n\n"
+        f"Active repository: {repo_full_name}\n\n"
+        "I combine GitHub evidence with Sibyl institutional memory — "
+        "what the system does, how it evolved, and why your team decided it.\n\n"
         "Ask me:\n"
         "• Why are we using this database?\n"
         "• What changed recently?\n"
         "• Have we encountered this issue before?\n"
         "• Why was this architecture chosen?\n"
         "• Should we introduce this technology?"
+        f"{gap_line}"
+    )
+
+
+def _greeting_response(
+    user_name: str | None = None,
+    *,
+    repo_full_name: str | None = None,
+    gap_count: int = 0,
+) -> str:
+    return get_welcome_message(
+        user_name,
+        repo_full_name=repo_full_name,
+        gap_count=gap_count,
     )
 
 
@@ -104,10 +141,16 @@ def _thanks_response() -> str:
     return "You're welcome! Let me know if there's anything else I can help with."
 
 
-def _how_are_you_response() -> str:
+def _how_are_you_response(*, repo_full_name: str | None = None) -> str:
+    if repo_full_name:
+        return (
+            f"I'm doing well and ready to help with {repo_full_name}. "
+            "Ask about architecture, recent changes, or Sibyl project memory — "
+            "or teach me missing institutional context."
+        )
     return (
         "I'm doing well and ready to help. "
-        "Ask me about your repo's architecture, recent changes, or anything stored in project memory."
+        "Connect a repository under Projects, then ask about architecture or memory."
     )
 
 
@@ -115,20 +158,36 @@ def _who_are_you_response() -> str:
     return (
         "I'm Kassandra, your AI CTO.\n\n"
         "I inspect your GitHub repositories, remember engineering decisions in "
-        "project memory, and help you reason about architecture, changes, and "
-        "technical trade-offs — using evidence from your actual codebase, not guesses."
+        "Sibyl project memory, and help you reason about architecture, changes, and "
+        "technical trade-offs — using evidence from your actual codebase, not guesses.\n\n"
+        "Use Teach Kassandra when the repository cannot explain the WHY."
     )
 
 
-def _help_response() -> str:
+def _help_response(*, repo_full_name: str | None = None, gap_count: int = 0) -> str:
+    if not repo_full_name:
+        return (
+            "Here's how to get started:\n\n"
+            "1. Connect GitHub in Settings if you haven't already.\n"
+            "2. Go to Projects and add a repository.\n"
+            "3. Kassandra bootstraps from the repo into Sibyl — architecture, history, and gaps.\n"
+            "4. Open Teach Kassandra to answer only the missing WHY questions.\n"
+            "5. Use AI Chat for reasoning that combines GitHub evidence with Sibyl memory.\n\n"
+            "I only answer from repository evidence and confirmed institutional memory."
+        )
+    gap_bit = (
+        f"\n• You have {gap_count} open knowledge gap{'s' if gap_count != 1 else ''} — "
+        "answer them in Teach Kassandra or tell me here (I'll confirm before saving)."
+        if gap_count
+        else ""
+    )
     return (
-        "Here's how to get started:\n\n"
-        "1. Connect GitHub in Settings if you haven't already.\n"
-        "2. Go to Projects and add a repository.\n"
-        "3. Kassandra bootstraps from the repo into Sibyl — architecture, history, and gaps.\n"
-        "4. Open Teach Kassandra to answer only the missing WHY questions.\n"
-        "5. Use AI Chat for reasoning that combines GitHub evidence with Sibyl memory.\n\n"
-        "I only answer from repository evidence and confirmed institutional memory."
+        f"You're connected to {repo_full_name}.\n\n"
+        "You can:\n"
+        "• Ask about stack, commits, PRs, and architecture here\n"
+        "• Teach me institutional context — I'll extract candidates and ask before saving to Sibyl\n"
+        "• Open Teach Kassandra for guided knowledge-gap questions"
+        f"{gap_bit}"
     )
 
 
@@ -136,6 +195,8 @@ def check_intro_message(
     message: str,
     *,
     user_name: str | None = None,
+    repo_full_name: str | None = None,
+    gap_count: int = 0,
 ) -> IntroMatch | None:
     """Return a canned reply if the message is a basic conversational opener."""
     text = _normalize(message)
@@ -150,7 +211,14 @@ def check_intro_message(
         return None
 
     if _matches_any(text, _GREETING_PATTERNS):
-        return IntroMatch(IntroIntent.GREETING, _greeting_response(user_name))
+        return IntroMatch(
+            IntroIntent.GREETING,
+            _greeting_response(
+                user_name,
+                repo_full_name=repo_full_name,
+                gap_count=gap_count,
+            ),
+        )
 
     if _matches_any(text, _FAREWELL_PATTERNS):
         return IntroMatch(IntroIntent.FAREWELL, _farewell_response())
@@ -159,12 +227,18 @@ def check_intro_message(
         return IntroMatch(IntroIntent.THANKS, _thanks_response())
 
     if _matches_any(text, _HOW_ARE_YOU_PATTERNS):
-        return IntroMatch(IntroIntent.HOW_ARE_YOU, _how_are_you_response())
+        return IntroMatch(
+            IntroIntent.HOW_ARE_YOU,
+            _how_are_you_response(repo_full_name=repo_full_name),
+        )
 
     if _matches_any(text, _WHO_ARE_YOU_PATTERNS):
         return IntroMatch(IntroIntent.WHO_ARE_YOU, _who_are_you_response())
 
     if _matches_any(text, _HELP_PATTERNS):
-        return IntroMatch(IntroIntent.HELP, _help_response())
+        return IntroMatch(
+            IntroIntent.HELP,
+            _help_response(repo_full_name=repo_full_name, gap_count=gap_count),
+        )
 
     return None

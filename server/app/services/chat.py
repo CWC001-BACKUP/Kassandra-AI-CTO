@@ -142,6 +142,37 @@ PROVENANCE AND CONFIDENCE (label internally; use plain language in replies):
 - CONFIRMED / RECORDED context comes from Sibyl institutional memory (developer-taught or prior) — use for WHY.
 - UNKNOWN means the authoritative evidence was not retrieved or does not contain the answer.
 
+For important architecture or institutional questions, organize your reasoning as:
+OBSERVED (what repo/GitHub proves) → CONFIRMED (what the developer explicitly taught) →
+INFERRED (your conclusions, labeled) → UNKNOWN (what cannot be established).
+Then synthesize a plain-language answer. Do not turn guesses into facts.
+
+ABSENCE OF EVIDENCE IS NOT EVIDENCE OF ABSENCE:
+- If you find no repository or Sibyl evidence of an incident/outage/decision, say you found
+  no evidence in available records — do NOT claim the event never happened.
+- Prefer: "I found no repository or institutional-memory evidence of X. That does not prove
+  X never occurred outside these records."
+
+INTENT vs IMPLEMENTATION:
+- Developer-confirmed INTENT is what the system is designed/meant to do.
+- IMPLEMENTATION is what the current code actually supports.
+- Never equate "developer said we support multiple user keys" with "the code fully implements
+  key generation, revocation, rotation, and user management" unless those are OBSERVED.
+- When they diverge, report CURRENT IMPLEMENTATION separately from INTENDED DESIGN.
+
+SECURITY CLAIMS MUST BE EVIDENCE-STRICT:
+- Only state how auth works (headers, token format, hashing, revocation, roles, expiry) when
+  the repository or a CONFIRMED memory explicitly establishes it. Otherwise say UNKNOWN.
+
+ARCHITECTURE STATE:
+- Distinguish CURRENT, HISTORICAL, PLANNED, and DEPRECATED architecture.
+- Do not present historical design as current capability.
+- Intentional technical debt (tagged INTENTIONAL_TECH_DEBT) is a known compromise, not a bug.
+
+CONTRADICTIONS:
+- If code OBSERVED behavior conflicts with CONFIRMED developer intent, surface both explicitly.
+  Do not silently choose one.
+
 Never confuse "the system does X" (observable) with "the team decided X because Y" (institutional).
 If Sibyl memory includes knowledge gaps, prefer asking targeted questions over inventing rationale.
 
@@ -256,6 +287,18 @@ _SIBYL_DISABLED_BLOCK = (
     "Sibyl memory is OFF. No institutional engineering memory is available — "
     "you cannot answer from past decisions, incidents, or architecture rationale."
 )
+
+
+def _gap_count_for_project(project: Project | None) -> int:
+    if not project:
+        return 0
+    try:
+        from app.services.institutional_memory import build_understanding_report
+
+        report = build_understanding_report(project.repo_full_name, project.repo_full_name)
+        return int((report.get("counts") or {}).get("knowledge_gaps") or 0)
+    except Exception:  # noqa: BLE001
+        return 0
 
 
 def _format_memory_context(hits: list, *, sibyl_enabled: bool = True) -> str:
@@ -427,7 +470,12 @@ async def process_chat_message(
         reply = _clean_response(answer_conversation_recap(history))
         return _result(reply, "session", project, [], [session_evidence("Chat session history")], sibyl_enabled=sibyl_enabled, is_session=True)
 
-    intro = check_intro_message(text, user_name=user.full_name or user.github_username)
+    intro = check_intro_message(
+        text,
+        user_name=user.full_name or user.github_username,
+        repo_full_name=project.repo_full_name if project else None,
+        gap_count=_gap_count_for_project(project),
+    )
     if intro:
         return _result(
             _clean_response(intro.response),
@@ -441,56 +489,62 @@ async def process_chat_message(
     tenant_id = project.repo_full_name if project else "default"
     repo_label = project.repo_full_name if project else "no project selected"
 
-    # Conversation → memory: detect candidates but never auto-store (section 15)
+    # Pending confirmation FIRST — "yes"/"no" are control actions, never extraction input
     if project and sibyl_enabled:
-        from app.services.teach import candidate_confirmation_prompt, looks_like_institutional_statement
+        from app.services.teach import process_teach_control_or_extract
 
-        lower = text.lower().strip()
-        affirming = lower in {"yes", "y", "yeah", "yep", "please do", "record it", "save it"}
-        if affirming and history:
-            # Find last user institutional statement to confirm into Sibyl
-            prior_user = next(
-                (
-                    m["content"]
-                    for m in reversed(history)
-                    if m.get("role") == "user" and looks_like_institutional_statement(m.get("content") or "")
-                ),
-                None,
-            )
-            if prior_user:
-                from app.services.teach import teach_kassandra
-
-                teach_result = await teach_kassandra(
-                    tenant_id,
-                    prior_user,
-                    developer_name=user.full_name,
-                    project_id=project.id,
+        teach_flow = await process_teach_control_or_extract(
+            tenant_id,
+            text,
+            user_id=user.id,
+            project_id=project.id,
+            developer_name=user.full_name,
+        )
+        if teach_flow and not teach_flow.get("passthrough_chat"):
+            reply = teach_flow.get("reply") or teach_flow.get("reason") or ""
+            intent = teach_flow.get("intent")
+            if intent in {"confirm_all", "select"} and teach_flow.get("ok"):
+                stored = teach_flow.get("stored") or teach_flow.get("verified") or []
+                return _result(
+                    _clean_response(reply),
+                    "memory",
+                    project,
+                    stored if isinstance(stored, list) else [],
+                    [],
+                    intent="teach_confirm",
                 )
-                if teach_result.get("stored"):
-                    mem = teach_result.get("memory") or {}
-                    reply = (
-                        "Recorded in Sibyl as human-confirmed institutional memory.\n\n"
-                        f"• {mem.get('title') or 'Memory'}\n"
-                        f"Confidence: confirmed\n"
-                        f"Source: {mem.get('source') or 'developer'}"
-                    )
-                    return _result(reply, "memory", project, [mem] if mem else [], [], intent="teach_confirm")
-                reply = teach_result.get("reason") or "Could not store that memory."
-                return _result(reply, "memory", project, [], [], intent="teach_confirm")
-
-        confirm_prompt = candidate_confirmation_prompt(text)
-        if confirm_prompt and not affirming:
-            # Continue to normal answering, but append confirmation ask at the end via flag
-            pass  # handled after main reply construction below — see candidate_note
-        candidate_note = confirm_prompt
-    else:
-        candidate_note = None
+            if intent == "reject":
+                return _result(
+                    _clean_response(reply or "Discarded pending memories."),
+                    "memory",
+                    project,
+                    [],
+                    [],
+                    intent="teach_reject",
+                )
+            if (
+                teach_flow.get("awaiting_confirmation")
+                or intent in {"edit", "remind"}
+                or teach_flow.get("pending")
+            ):
+                return _result(
+                    _clean_response(reply or "Candidate memories ready for confirmation."),
+                    "memory",
+                    project,
+                    teach_flow.get("memories")
+                    or (teach_flow.get("pending") or {}).get("candidate_memories")
+                    or [],
+                    [],
+                    intent="teach_pending",
+                )
 
     if is_project_name_question(text):
         if project:
             reply = (
                 f"Your active project is {project.repo_full_name}.\n\n"
-                "This is the repository I'm using for memory, commits, and analysis."
+                "This is the repository I'm using for memory, commits, and analysis.\n"
+                "Use Teach Kassandra for guided knowledge-gap questions, or tell me "
+                "institutional context here — I'll confirm before saving to Sibyl."
             )
         else:
             reply = "No active project selected. Add one under Projects."
@@ -1215,7 +1269,6 @@ async def process_chat_message(
         sibyl_enabled=sibyl_enabled,
         has_repo_history=bool(repo_ctx),
         has_commit_detail=bool(repo_ctx and repo_ctx.get("commit_detail")),
-        candidate_note=candidate_note,
     )
 
 
@@ -1267,5 +1320,14 @@ def _result(
     }
 
 
-def get_initial_chat_message(user_name: str | None = None) -> str:
-    return get_welcome_message(user_name)
+def get_initial_chat_message(
+    user_name: str | None = None,
+    *,
+    repo_full_name: str | None = None,
+    gap_count: int = 0,
+) -> str:
+    return get_welcome_message(
+        user_name,
+        repo_full_name=repo_full_name,
+        gap_count=gap_count,
+    )

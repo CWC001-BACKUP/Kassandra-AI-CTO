@@ -9,6 +9,8 @@ from app.schemas.project import (
     ConfirmMemoryRequest,
     CreateProjectRequest,
     GitHubRepoResponse,
+    MemoryReviewRequest,
+    MemoryReviewResponse,
     MemorySearchResponse,
     ProjectResponse,
     ProjectUnderstandingResponse,
@@ -16,7 +18,7 @@ from app.schemas.project import (
     TeachResponse,
 )
 from app.services.github import GitHubError, list_user_repos
-from app.services.institutional_memory import build_understanding_report
+from app.services.institutional_memory import build_understanding_report, review_memory
 from app.services.memory import get_memory_provider
 from app.services.projects import (
     activate_project,
@@ -106,6 +108,33 @@ async def project_understanding(
     return ProjectUnderstandingResponse(**report)
 
 
+@router.post(
+    "/projects/{project_id}/memories/{memory_id}/review",
+    response_model=MemoryReviewResponse,
+)
+async def review_project_memory(
+    project_id: str,
+    memory_id: str,
+    body: MemoryReviewRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> MemoryReviewResponse:
+    """Confirm, reject, or correct a known/inferred fact in Sibyl."""
+    project = await get_user_project(db, current_user.id, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    result = review_memory(
+        project.repo_full_name,
+        memory_id,
+        action=body.action,
+        note=body.note,
+        developer_name=current_user.full_name,
+    )
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("reason") or "Review failed")
+    return MemoryReviewResponse(**result)
+
+
 @router.post("/projects/{project_id}/teach", response_model=TeachResponse)
 async def teach_project(
     project_id: str,
@@ -113,20 +142,24 @@ async def teach_project(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TeachResponse:
-    """Teach Kassandra — store human-confirmed institutional memory in Sibyl."""
+    """Teach Kassandra — extract pending candidates, or confirm them into Sibyl."""
     project = await get_user_project(db, current_user.id, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     result = await teach_kassandra(
         project.repo_full_name,
-        body.text,
+        body.text or "",
         developer_name=current_user.full_name,
         project_id=project.id,
+        user_id=current_user.id,
         gap_memory_id=body.gap_memory_id,
         question=body.question,
         extra=body.extra,
+        confirm=body.confirm,
+        pending_id=body.pending_id,
+        selected_indices=body.selected_indices,
     )
-    return TeachResponse(**result)
+    return TeachResponse(**{k: v for k, v in result.items() if k in TeachResponse.model_fields})
 
 
 @router.post("/memory/teach", response_model=TeachResponse)
@@ -147,14 +180,18 @@ async def teach_active_project(
         )
     result = await teach_kassandra(
         project.repo_full_name,
-        body.text,
+        body.text or "",
         developer_name=current_user.full_name,
         project_id=project.id,
+        user_id=current_user.id,
         gap_memory_id=body.gap_memory_id,
         question=body.question,
         extra=body.extra,
+        confirm=body.confirm,
+        pending_id=body.pending_id,
+        selected_indices=body.selected_indices,
     )
-    return TeachResponse(**result)
+    return TeachResponse(**{k: v for k, v in result.items() if k in TeachResponse.model_fields})
 
 
 @router.post("/memory/confirm", response_model=TeachResponse)
@@ -163,9 +200,7 @@ async def confirm_candidate_memory(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TeachResponse:
-    """Confirm a conversational candidate memory into Sibyl (avoids auto-pollution)."""
-    if not body.confirm:
-        return TeachResponse(stored=False, reason="Not confirmed — nothing stored.")
+    """Confirm or discard pending institutional memory (YES/NO control action)."""
     project = None
     if body.project_id:
         project = await get_user_project(db, current_user.id, body.project_id)
@@ -175,11 +210,14 @@ async def confirm_candidate_memory(
         raise HTTPException(status_code=400, detail="No active project.")
     result = await teach_kassandra(
         project.repo_full_name,
-        body.text,
+        body.text or "",
         developer_name=current_user.full_name,
         project_id=project.id,
+        user_id=current_user.id,
+        confirm=body.confirm,
+        pending_id=body.pending_id,
     )
-    return TeachResponse(**result)
+    return TeachResponse(**{k: v for k, v in result.items() if k in TeachResponse.model_fields})
 
 
 @router.post("/projects/{project_id}/activate", response_model=ProjectResponse)

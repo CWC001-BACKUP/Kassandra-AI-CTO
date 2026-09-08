@@ -4,7 +4,7 @@ import { Button } from '../ui/Button'
 import { useAuth } from '../../context/AuthProvider'
 import { mobileBottomNavItems, mobileMoreNavItems } from './dashboardNav'
 
-export function MobileBottomNav() {
+export function MobileBottomNav({ gapCount = 0 }: { gapCount?: number }) {
   const [moreOpen, setMoreOpen] = useState(false)
   const { logout } = useAuth()
   const navigate = useNavigate()
@@ -53,7 +53,14 @@ export function MobileBottomNav() {
                   }
                 >
                   {item.icon}
-                  {item.label}
+                  <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                    <span className="truncate">{item.label}</span>
+                    {item.to === '/dashboard/teach' && gapCount > 0 && (
+                      <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-warning)]/20 px-1.5 text-[10px] font-semibold text-[var(--color-warning)]">
+                        {gapCount > 99 ? '99+' : gapCount}
+                      </span>
+                    )}
+                  </span>
                 </NavLink>
               ))}
               <Link to="/" onClick={() => setMoreOpen(false)} className="block pt-1">
@@ -92,7 +99,7 @@ export function MobileBottomNav() {
           <button
             type="button"
             onClick={() => setMoreOpen((open) => !open)}
-            className={`flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium transition-colors sm:text-xs ${
+            className={`relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-medium transition-colors sm:text-xs ${
               moreOpen || moreActive
                 ? 'text-[var(--color-cyan)]'
                 : 'text-[var(--color-text-dim)] hover:text-[var(--color-text)]'
@@ -100,9 +107,14 @@ export function MobileBottomNav() {
             aria-expanded={moreOpen}
             aria-label="More options"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-            </svg>
+            <span className="relative">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+              </svg>
+              {gapCount > 0 && (
+                <span className="absolute -right-2 -top-1 h-2 w-2 rounded-full bg-[var(--color-warning)]" />
+              )}
+            </span>
             <span>More</span>
           </button>
         </nav>

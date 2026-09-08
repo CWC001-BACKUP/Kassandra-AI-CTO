@@ -24,6 +24,7 @@ import type {
   MessageResponse,
   Project,
   ProjectUnderstanding,
+  MemoryReviewResponse,
   RegisterRequest,
   Report,
   ResetPasswordRequest,
@@ -241,10 +242,28 @@ export const projectsApi = {
   understanding: (projectId: string) =>
     apiFetch<ProjectUnderstanding>(`/projects/${projectId}/understanding`),
 
+  reviewMemory: (
+    projectId: string,
+    memoryId: string,
+    action: 'confirm' | 'reject' | 'correct',
+    note?: string | null,
+  ) =>
+    apiFetch<MemoryReviewResponse>(`/projects/${projectId}/memories/${memoryId}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ action, note: note ?? null }),
+    }),
+
   teach: (
     projectId: string,
     text: string,
-    opts?: { gap_memory_id?: string | null; question?: string | null; extra?: string | null },
+    opts?: {
+      gap_memory_id?: string | null
+      question?: string | null
+      extra?: string | null
+      confirm?: boolean | null
+      pending_id?: string | null
+      selected_indices?: number[] | null
+    },
   ) =>
     apiFetch<TeachResponse>(`/projects/${projectId}/teach`, {
       method: 'POST',
@@ -253,6 +272,9 @@ export const projectsApi = {
         gap_memory_id: opts?.gap_memory_id ?? null,
         question: opts?.question ?? null,
         extra: opts?.extra ?? null,
+        confirm: opts?.confirm ?? null,
+        pending_id: opts?.pending_id ?? null,
+        selected_indices: opts?.selected_indices ?? null,
       }),
     }),
 
@@ -263,6 +285,8 @@ export const projectsApi = {
       gap_memory_id?: string | null
       question?: string | null
       extra?: string | null
+      confirm?: boolean | null
+      pending_id?: string | null
     },
   ) =>
     apiFetch<TeachResponse>('/memory/teach', {
@@ -273,13 +297,27 @@ export const projectsApi = {
         gap_memory_id: opts?.gap_memory_id ?? null,
         question: opts?.question ?? null,
         extra: opts?.extra ?? null,
+        confirm: opts?.confirm ?? null,
+        pending_id: opts?.pending_id ?? null,
       }),
     }),
 
-  confirmMemory: (text: string, projectId?: string | null) =>
+  confirmMemory: (
+    opts: {
+      confirm: boolean
+      projectId?: string | null
+      pending_id?: string | null
+      text?: string
+    },
+  ) =>
     apiFetch<TeachResponse>('/memory/confirm', {
       method: 'POST',
-      body: JSON.stringify({ text, project_id: projectId ?? null, confirm: true }),
+      body: JSON.stringify({
+        text: opts.text ?? '',
+        project_id: opts.projectId ?? null,
+        confirm: opts.confirm,
+        pending_id: opts.pending_id ?? null,
+      }),
     }),
 }
 

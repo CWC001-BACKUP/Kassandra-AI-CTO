@@ -1,0 +1,564 @@
+{
+  "timestamp": "2026-09-08T18:57:30.282218+00:00",
+  "repo": "CWC001-lab/Kassandra_Trade_Engine",
+  "overall": 8.379310344827585,
+  "passed": 26,
+  "total": 29,
+  "decision": "NO-GO",
+  "decision_code": 2,
+  "cases": [
+    {
+      "feature": "Intro greeting",
+      "question": "hi",
+      "ok": true,
+      "score": 8.5,
+      "source": "intro",
+      "intent": "greeting",
+      "memory_hits": 0,
+      "evidence_level": 5,
+      "evidence_count": 0,
+      "reply_preview": "Hello, Eze Chinedu. I'm Kassandra, your AI CTO. Active repository: CWC001-lab/Kassandra_Trade_Engine I combine GitHub evidence with Sibyl institutional memory \u2014 what the system does, how it evolved, and why your team de...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Intro help",
+      "question": "help",
+      "ok": true,
+      "score": 8.5,
+      "source": "intro",
+      "intent": "help",
+      "memory_hits": 0,
+      "evidence_level": 5,
+      "evidence_count": 0,
+      "reply_preview": "You're connected to CWC001-lab/Kassandra_Trade_Engine. You can: \u2022 Ask about stack, commits, PRs, and architecture here \u2022 Teach me institutional context \u2014 I'll extract candidates and ask before saving to Sibyl \u2022 Open Tea...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Project name",
+      "question": "What's my project?",
+      "ok": true,
+      "score": 9.5,
+      "source": "system",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": 5,
+      "evidence_count": 0,
+      "reply_preview": "Your active project is CWC001-lab/Kassandra_Trade_Engine. This is the repository I'm using for memory, commits, and analysis. Use Teach Kassandra for guided knowledge-gap questions, or tell me institutional context here...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Last commit author",
+      "question": "Who made the last commit?",
+      "ok": true,
+      "score": 9.5,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 1,
+      "evidence_level": 5,
+      "evidence_count": 2,
+      "reply_preview": "On the dev branch, the most recent commit was made by CWC001-lab. Repository: CWC001-lab/Kassandra_Trade_Engine Commit: 89da7fb Message: AUto config Date: 2026-07-22T03:19:04Z",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Commit detail follow-up",
+      "question": "What changed in that commit?",
+      "ok": true,
+      "score": 9.5,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 3,
+      "evidence_level": 4,
+      "evidence_count": 5,
+      "reply_preview": "What changed in commit 89da7fb (\u201cAUto config\u201d) The commit is a large \u201cpipeline\u2011fix\u201d that adds a whole set of utilities for auto\u2011trade handling, expands the configuration model, and tightens the live\u2011sync and account\u2011reg...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Commit file list",
+      "question": "List the files that changed",
+      "ok": true,
+      "score": 9.5,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 1,
+      "evidence_level": 4,
+      "evidence_count": 17,
+      "reply_preview": "Commit 89da7fb (branch: dev) changed 19 files: Message: AUto config \u2022 api/bridge_client.py (modified, +72/-2) \u2022 api/config_store.py (modified, +32/-3) \u2022 api/live_sync.py (modified, +222/-25) \u2022 api/server.py (modified, +...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Previous commit",
+      "question": "What was the previous commit?",
+      "ok": true,
+      "score": 9.0,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 20,
+      "evidence_level": 5,
+      "evidence_count": 2,
+      "reply_preview": "On the dev branch, the commit before 89da7fb is: Commit: 1a57fa1 Message: auto trade settings and fixes to broken pipeline2 Author: CWC001-lab Date: 2026-07-03T13:45:53Z",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Commit compare",
+      "question": "Compare the last two commits",
+      "ok": true,
+      "score": 9.5,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 20,
+      "evidence_level": 3,
+      "evidence_count": 5,
+      "reply_preview": "Commit\u2011by\u2011commit comparison (dev branch) --- 1. File\u2011set overlap *Total files changed* \u2013 A = 19, B = 1 *Shared files* \u2013 1 (api/server.py) *Only\u2011in\u2011A* \u2013 18 files (see list below) *Only\u2011in\u2011B* \u2013 0 (B touches only the share...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Commit count",
+      "question": "How many commits are there?",
+      "ok": true,
+      "score": 9.5,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": 3,
+      "evidence_count": 3,
+      "reply_preview": "The repository CWC001-lab/Kassandra_Trade_Engine has 27 commits on the dev branch. This count comes directly from GitHub's commit history for that branch.",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Repo created date",
+      "question": "When was this repository created?",
+      "ok": true,
+      "score": 9.0,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": 5,
+      "evidence_count": 2,
+      "reply_preview": "The GitHub repository CWC001-lab/Kassandra_Trade_Engine was created on 2026-05-30T12:12:58Z. Last push to the repository: 2026-07-22T03:19:46Z. Repository URL: https://github.com/CWC001-lab/Kassandra_Trade_Engine",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Recent changes",
+      "question": "What changed recently?",
+      "ok": true,
+      "score": 9.5,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 1,
+      "evidence_level": 3,
+      "evidence_count": 4,
+      "reply_preview": "Recent changes (latest commit 89da7fbab44c797ca983c592bb98fe3df9667e42 \u2013 \u201cAUto config\u201d, 2026\u201107\u201122 03:19 UTC) In short: The most recent commit introduced a complete \u201cauto\u2011trade\u201d feature set \u2013 new API endpoints, richer s...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "First commit",
+      "question": "What was the first commit?",
+      "ok": true,
+      "score": 8.5,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": 3,
+      "evidence_count": 18,
+      "reply_preview": "The first commit on the dev branch is: - SHA: 2da48d3 (full SHA 2da48d3051fca3182ac0489b2db5649c14dfacd8) - Author: CWC001\u2011lab - Date: 2026\u201105\u201130 12:14:25 UTC - Message: *first deployment for the kassandra engine* - Fil...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "File churn hotspots",
+      "question": "Which files changed the most?",
+      "ok": true,
+      "score": 8.5,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": 4,
+      "evidence_count": 17,
+      "reply_preview": "Commit 89da7fb (branch: dev) changed 19 files: Message: AUto config \u2022 api/bridge_client.py (modified, +72/-2) \u2022 api/config_store.py (modified, +32/-3) \u2022 api/live_sync.py (modified, +222/-25) \u2022 api/server.py (modified, +...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "CI status",
+      "question": "Did CI fail recently?",
+      "ok": true,
+      "score": 8.5,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 1,
+      "evidence_level": 5,
+      "evidence_count": 2,
+      "reply_preview": "CI/CD status for CWC001-lab/Kassandra_Trade_Engine: \u2022 Graph Update: pip in /. #1391201390 on dev \u2014 success (101d ago) by dependabot[bot] [2da48d3] Configured workflows: Dependency Graph",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Activity overview",
+      "question": "What's going on in the repo?",
+      "ok": true,
+      "score": 8.5,
+      "source": "github",
+      "intent": "",
+      "memory_hits": 7,
+      "evidence_level": 5,
+      "evidence_count": 4,
+      "reply_preview": "Full activity overview for CWC001-lab/Kassandra_Trade_Engine: Repository: CWC001-lab/Kassandra_Trade_Engine Default branch: dev Total commits on dev: 27 Total contributors: 1 Primary language: Python Created: 2026-05-30...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Architecture WHY (memory+LLM)",
+      "question": "What are the most important architectural decisions\u2026",
+      "ok": true,
+      "score": 9.5,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 20,
+      "evidence_level": 3,
+      "evidence_count": 1,
+      "reply_preview": "Key architectural decisions (what the code and the team have confirmed) \u2022 Flask\u2011based REST API as the current \u201cbaseline\u201d \u2013 The api/ package contains a Flask server (api/server.py, api/request_auth.py, etc.). \u2022 *Why*: De...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Auth explanation (repo+memory)",
+      "question": "How does authentication and authorisation work?",
+      "ok": true,
+      "score": 9.5,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 2,
+      "evidence_level": 3,
+      "evidence_count": 2,
+      "reply_preview": "What the repository shows (observed) - The api/ package contains the modules auth_store.py, request_auth.py and tenant.py. - The README and launch scripts refer to a Flask\u2011based REST API ( api/server.py ) that serves th...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Incident / constraint recall",
+      "question": "Were there any production incidents\u2026",
+      "ok": true,
+      "score": 9.0,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 20,
+      "evidence_level": 3,
+      "evidence_count": 1,
+      "reply_preview": "Observed evidence - The repository contains a Flask\u2011based REST API ( api/server.py ) and no code for message queues, Kafka, or other event\u2011driven components. - Commit history shows many \u201cisolation / lock\u201d changes (e.g.,...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Pending extract (teach-via-chat)",
+      "question": "We decided that new developers must never run the live EC2 i\u2026",
+      "ok": true,
+      "score": 10.0,
+      "source": "memory",
+      "intent": "teach_pending",
+      "memory_hits": 1,
+      "evidence_level": 5,
+      "evidence_count": 1,
+      "reply_preview": "This sounds like useful institutional context. I extracted 1 potential memory: 1. New developers must not run live EC2 isolation unlock without senior review Decision: New developers must never run the live EC2 isolatio...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Pending confirm YES",
+      "question": "yes",
+      "ok": true,
+      "score": 9.0,
+      "source": "memory",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "Saved 1 institutional memory to Sibyl: \u2022 New developers must not run live EC2 isolation unlock without senior review",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Pending YES+knowledge",
+      "question": "yes, and master keys gate\u2026",
+      "ok": true,
+      "score": 8.0,
+      "source": "memory",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "That knowledge already exists in Sibyl \u2014 I did not create a duplicate: \u2022 Use bridge-ready JSON instead of direct MT5",
+      "notes": "handled",
+      "error": ""
+    },
+    {
+      "feature": "GitHub while pending (passthrough)",
+      "question": "How many contributors are there?",
+      "ok": false,
+      "score": 4.0,
+      "source": "memory",
+      "intent": "teach_pending",
+      "memory_hits": 1,
+      "evidence_level": 5,
+      "evidence_count": 1,
+      "reply_preview": "You still have pending institutional memories waiting for confirmation. This sounds like useful institutional context. I extracted 1 potential memory: 1. Flask REST retained until reliability metrics justify async queue...",
+      "notes": "hit forbidden terms ['would you like me to save these to sibyl']; unexpected pending confirmation gate",
+      "error": ""
+    },
+    {
+      "feature": "Cross-session recall (with pending)",
+      "question": "we were talking about something being dangerous\u2026",
+      "ok": true,
+      "score": 10.0,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 20,
+      "evidence_level": 3,
+      "evidence_count": 1,
+      "reply_preview": "The dangerous operation for a new developer is running the live EC2 isolation\u2011unlock procedure. - Constraint (confirmed): New developers are prohibited from executing the live EC2 isolation unlock unless a senior develo...",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Continue while pending",
+      "question": "lets continue",
+      "ok": false,
+      "score": 3.0,
+      "source": "memory",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "You still have pending institutional memories waiting for confirmation. This sounds like useful institutional context. I extracted 1 potential memory: 1. Flask REST retained until reliability metrics justify async queue...",
+      "notes": "BLOCKED by pending gate",
+      "error": ""
+    },
+    {
+      "feature": "In-session recap",
+      "question": "What were we talking about?",
+      "ok": true,
+      "score": 8.5,
+      "source": "session",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": 1,
+      "evidence_count": 1,
+      "reply_preview": "Summary of this chat session: Current session Last question: \"What stack are we using?\"",
+      "notes": "",
+      "error": ""
+    },
+    {
+      "feature": "Sibyl disabled path",
+      "question": "Why was Flask chosen\u2026 (sibyl off)",
+      "ok": true,
+      "score": 7.0,
+      "source": "llm",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "I found no repository documentation, commit messages, or other evidence that explains the reasoning behind selecting Flask for the API layer. The codebase includes a Flask\u2011based server (e.g., api/server.py), but the pro...",
+      "notes": "memory_hits=0 (expect 0)",
+      "error": ""
+    },
+    {
+      "feature": "Understanding report",
+      "question": "build_understanding_report()",
+      "ok": true,
+      "score": 8.5,
+      "source": "",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "{\"repo_full_name\": \"CWC001-lab/Kassandra_Trade_Engine\", \"headline\": \"Review what Kassandra learned from the repo, answer open questions, and add anything the code cannot explain.\", \"architecture\": [{\"memory_id\": \"4905d7...",
+      "notes": "gap_count~=0",
+      "error": ""
+    },
+    {
+      "feature": "Teach API extract",
+      "question": "POST teach (confirm=false)",
+      "ok": false,
+      "score": 3.0,
+      "source": "",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "{\"stored\": false, \"awaiting_confirmation\": false, \"reason\": \"No pending memory to discard.\", \"memory\": null, \"memories\": [], \"pending\": null, \"conflicts\": [], \"gap_resolved\": false, \"gaps_removed\": 0, \"reply\": null}",
+      "notes": "no pending",
+      "error": ""
+    },
+    {
+      "feature": "Teach API confirm",
+      "question": "yes via teach",
+      "ok": true,
+      "score": 8.5,
+      "source": "",
+      "intent": "",
+      "memory_hits": 0,
+      "evidence_level": null,
+      "evidence_count": 0,
+      "reply_preview": "confirmed + cleared",
+      "notes": "",
+      "error": ""
+    }
+  ],
+  "ranking": [
+    {
+      "feature": "Pending extract (teach-via-chat)",
+      "score": 10.0,
+      "ok": true
+    },
+    {
+      "feature": "Cross-session recall (with pending)",
+      "score": 10.0,
+      "ok": true
+    },
+    {
+      "feature": "Project name",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Last commit author",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Commit detail follow-up",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Commit file list",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Commit compare",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Commit count",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Recent changes",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Architecture WHY (memory+LLM)",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Auth explanation (repo+memory)",
+      "score": 9.5,
+      "ok": true
+    },
+    {
+      "feature": "Previous commit",
+      "score": 9.0,
+      "ok": true
+    },
+    {
+      "feature": "Repo created date",
+      "score": 9.0,
+      "ok": true
+    },
+    {
+      "feature": "Incident / constraint recall",
+      "score": 9.0,
+      "ok": true
+    },
+    {
+      "feature": "Pending confirm YES",
+      "score": 9.0,
+      "ok": true
+    },
+    {
+      "feature": "Intro greeting",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "Intro help",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "First commit",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "File churn hotspots",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "CI status",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "Activity overview",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "In-session recap",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "Understanding report",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "Teach API confirm",
+      "score": 8.5,
+      "ok": true
+    },
+    {
+      "feature": "Pending YES+knowledge",
+      "score": 8.0,
+      "ok": true
+    },
+    {
+      "feature": "Sibyl disabled path",
+      "score": 7.0,
+      "ok": true
+    },
+    {
+      "feature": "GitHub while pending (passthrough)",
+      "score": 4.0,
+      "ok": false
+    },
+    {
+      "feature": "Continue while pending",
+      "score": 3.0,
+      "ok": false
+    },
+    {
+      "feature": "Teach API extract",
+      "score": 3.0,
+      "ok": false
+    }
+  ]
+}

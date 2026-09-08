@@ -85,20 +85,33 @@ export function ProjectsPage() {
 
       {lastUnderstanding?.understanding && (
         <Card className="mb-6 border-[var(--color-cyan)]/25 p-4 sm:p-6">
-          <h2 className="text-lg font-semibold">Bootstrap complete</h2>
-          <p className="mt-2 text-sm text-[var(--color-text-muted)] whitespace-pre-wrap">
+          <h2 className="text-lg font-semibold">Repository review finished</h2>
+          <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--color-text-muted)]">
             {lastUnderstanding.understanding.interview_intro}
           </p>
-          <div className="mt-3 flex flex-wrap gap-3 text-xs text-[var(--color-text-dim)]">
-            <span>{lastUnderstanding.counts?.observed ?? 0} observed</span>
-            <span>{lastUnderstanding.counts?.inferred ?? 0} inferred</span>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--color-text-dim)]">
             <span>
-              {lastUnderstanding.counts?.knowledge_gaps ?? 0} knowledge gaps
+              {lastUnderstanding.counts?.observed ??
+                lastUnderstanding.understanding.counts?.observed ??
+                0}{' '}
+              known from the repo
+            </span>
+            <span>
+              {lastUnderstanding.counts?.inferred ??
+                lastUnderstanding.understanding.counts?.inferred ??
+                0}{' '}
+              inferred
+            </span>
+            <span>
+              {lastUnderstanding.understanding.counts?.knowledge_gaps ??
+                lastUnderstanding.counts?.knowledge_gaps ??
+                0}{' '}
+              questions for you
             </span>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link to="/dashboard/teach">
-              <Button size="sm">Teach Kassandra the gaps</Button>
+              <Button size="sm">Answer questions</Button>
             </Link>
             <Link to="/dashboard/chat">
               <Button size="sm" variant="outline">

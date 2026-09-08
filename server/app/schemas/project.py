@@ -42,27 +42,38 @@ class MemorySearchResponse(BaseModel):
 
 
 class TeachRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=8000)
+    text: str = Field(default="", max_length=8000)
     project_id: str | None = None
     gap_memory_id: str | None = None
     question: str | None = Field(default=None, max_length=500)
     extra: str | None = Field(default=None, max_length=4000)
+    confirm: bool | None = None
+    pending_id: str | None = None
+    selected_indices: list[int] | None = None
 
 
 class TeachResponse(BaseModel):
     stored: bool
+    awaiting_confirmation: bool = False
     reason: str | None = None
     memory: dict | None = None
+    memories: list[dict] = Field(default_factory=list)
+    pending: dict | None = None
     conflicts: list[dict] = Field(default_factory=list)
     duplicate: bool = False
     gap_resolved: bool = False
     gaps_removed: int = 0
+    reply: str | None = None
+    verified: bool = False
+    selected_count: int | None = None
+    discarded_count: int | None = None
 
 
 class ConfirmMemoryRequest(BaseModel):
-    text: str = Field(..., min_length=8, max_length=8000)
+    text: str = Field(default="", max_length=8000)
     project_id: str | None = None
     confirm: bool = True
+    pending_id: str | None = None
 
 
 class ProjectUnderstandingResponse(BaseModel):
@@ -70,8 +81,25 @@ class ProjectUnderstandingResponse(BaseModel):
     headline: str
     architecture: list[dict]
     historical_evolution: list[dict]
+    problems: list[dict] = Field(default_factory=list)
+    inferred: list[dict] = Field(default_factory=list)
+    confirmed: list[dict] = Field(default_factory=list)
+    reviewable_facts: list[dict] = Field(default_factory=list)
     counts: dict
     knowledge_gaps: list[dict]
     confidence_areas: dict
     interview_intro: str
     updated_at: str | None = None
+
+
+class MemoryReviewRequest(BaseModel):
+    action: str = Field(..., pattern="^(confirm|reject|correct)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class MemoryReviewResponse(BaseModel):
+    ok: bool
+    action: str | None = None
+    reason: str | None = None
+    memory: dict | None = None
+    correction: dict | None = None

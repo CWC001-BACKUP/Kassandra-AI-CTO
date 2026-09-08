@@ -42,6 +42,45 @@ def _session_response(session, message_count: int = 0) -> ChatSessionResponse:
     )
 
 
+def _knowledge_gap_count(repo_full_name: str) -> int:
+    try:
+        from app.services.institutional_memory import build_understanding_report
+
+        report = build_understanding_report(repo_full_name, repo_full_name)
+        return int((report.get("counts") or {}).get("knowledge_gaps") or 0)
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+async def _ensure_fresh_intro(db: AsyncSession, session, user: User) -> None:
+    """Rewrite intro-only welcomes that still say no repo when a project is bound."""
+    messages = list(session.messages or [])
+    if len(messages) != 1:
+        return
+    msg = messages[0]
+    if msg.role != "assistant" or (msg.source or "") != "intro":
+        return
+    if not session.project_id:
+        return
+
+    project = await get_user_project(db, user.id, session.project_id)
+    if not project or not project.repo_full_name:
+        return
+
+    content = msg.content or ""
+    repo = project.repo_full_name
+    stale = "No repository is connected" in content or repo not in content
+    if not stale:
+        return
+
+    msg.content = get_initial_chat_message(
+        user.full_name or user.github_username,
+        repo_full_name=repo,
+        gap_count=_knowledge_gap_count(repo),
+    )
+    await db.flush()
+
+
 @router.get("/sessions", response_model=list[ChatSessionResponse])
 async def get_sessions(
     current_user: User = Depends(get_current_user),
@@ -65,7 +104,23 @@ async def create_chat_session(
     session = await create_session(
         db, current_user.id, project_id=project_id, title=body.title
     )
-    welcome = get_initial_chat_message(current_user.full_name or current_user.github_username)
+
+    project = None
+    if project_id:
+        project = await get_user_project(db, current_user.id, project_id)
+    if not project:
+        project = await get_active_project(db, current_user.id)
+    gap_count = (
+        _knowledge_gap_count(project.repo_full_name)
+        if project and project.repo_full_name
+        else 0
+    )
+
+    welcome = get_initial_chat_message(
+        current_user.full_name or current_user.github_username,
+        repo_full_name=project.repo_full_name if project else None,
+        gap_count=gap_count,
+    )
     msg = await add_message(db, session, role="assistant", content=welcome, source="intro")
 
     return ChatSessionDetailResponse(
@@ -92,6 +147,8 @@ async def get_chat_session(
     session = await get_session(db, current_user.id, session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    await _ensure_fresh_intro(db, session, current_user)
 
     return ChatSessionDetailResponse(
         **_session_response(session, message_count=len(session.messages)).model_dump(),

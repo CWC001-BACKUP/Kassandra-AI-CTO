@@ -205,27 +205,48 @@ export interface AnalysisResponse {
   history_meta?: Record<string, unknown> | null
 }
 
+export interface MemoryCard {
+  memory_id?: string | null
+  sibyl_key?: string | null
+  type?: string | null
+  title?: string | null
+  content?: string | null
+  decision?: string | null
+  reason?: string | null
+  outcome?: string | null
+  alternatives?: string[]
+  confidence?: string | null
+  source?: string | null
+  source_reference?: string | null
+  status?: string | null
+  priority?: string | null
+  question?: string | null
+  affected_components?: string[]
+  tags?: string[]
+  historical_date?: string | null
+  related_commits?: string[]
+  related_prs?: string[]
+  updated_at?: string | null
+  confirmed_at?: string | null
+}
+
 export interface ProjectUnderstanding {
   repo_full_name: string
   headline: string
-  architecture: Array<{
-    title?: string | null
-    content?: string | null
-    confidence?: string | null
-  }>
-  historical_evolution: Array<{
-    title?: string | null
-    decision?: string | null
-    reason?: string | null
-    confidence?: string | null
-    source?: string | null
-  }>
+  architecture: MemoryCard[]
+  historical_evolution: MemoryCard[]
+  problems?: MemoryCard[]
+  inferred?: MemoryCard[]
+  confirmed?: MemoryCard[]
+  reviewable_facts?: MemoryCard[]
   counts: {
     observed?: number
     inferred?: number
     confirmed?: number
     knowledge_gaps?: number
     high_priority_gaps?: number
+    problems?: number
+    reviewable?: number
     stored?: number
   }
   knowledge_gaps: Array<{
@@ -240,20 +261,49 @@ export interface ProjectUnderstanding {
   updated_at?: string | null
 }
 
+export interface MemoryReviewResponse {
+  ok: boolean
+  action?: string | null
+  reason?: string | null
+  memory?: MemoryCard | null
+  correction?: MemoryCard | null
+}
+
 export interface TeachResponse {
   stored: boolean
+  awaiting_confirmation?: boolean
   reason?: string | null
   memory?: Record<string, unknown> | null
+  memories?: Array<Record<string, unknown>>
+  pending?: {
+    pending_id?: string
+    candidate_count?: number
+    candidates?: Array<{
+      index?: number
+      title?: string | null
+      decision?: string | null
+      reason?: string | null
+      content?: string | null
+      type?: string | null
+      confidence?: string | null
+      status?: string | null
+    }>
+  } | null
   conflicts: Array<Record<string, unknown>>
   duplicate?: boolean
   gap_resolved?: boolean
   gaps_removed?: number
+  reply?: string | null
+  verified?: boolean
+  selected_count?: number | null
+  discarded_count?: number | null
 }
 
 export interface DashboardStats {
   projects_count: number
   active_project?: string | null
   memory_count: number
+  knowledge_gap_count?: number
   changes_today: number
   reports_count: number
 }

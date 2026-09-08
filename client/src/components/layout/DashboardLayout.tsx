@@ -1,13 +1,22 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Logo } from '../ui/Logo'
 import { useAuth } from '../../context/AuthProvider'
 import { Button } from '../ui/Button'
 import { dashboardNavItems } from './dashboardNav'
 import { MobileBottomNav } from './MobileBottomNav'
+import { dashboardApi } from '../../services/api'
 
 export function DashboardLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+
+  const statsQuery = useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: dashboardApi.stats,
+    refetchInterval: 60_000,
+  })
+  const gapCount = statsQuery.data?.knowledge_gap_count ?? 0
 
   const handleLogout = async () => {
     await logout()
@@ -42,7 +51,14 @@ export function DashboardLayout() {
               }
             >
               {item.icon}
-              {item.label}
+              <span className="flex min-w-0 flex-1 items-center justify-between gap-2">
+                <span className="truncate">{item.label}</span>
+                {item.to === '/dashboard/teach' && gapCount > 0 && (
+                  <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[var(--color-warning)]/20 px-1.5 text-[10px] font-semibold text-[var(--color-warning)]">
+                    {gapCount > 99 ? '99+' : gapCount}
+                  </span>
+                )}
+              </span>
             </NavLink>
           ))}
         </nav>
@@ -78,7 +94,7 @@ export function DashboardLayout() {
         </div>
       </main>
 
-      <MobileBottomNav />
+      <MobileBottomNav gapCount={gapCount} />
     </div>
   )
 }

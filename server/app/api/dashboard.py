@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models import ActivityLog, Project, Report, User
+from app.services.institutional_memory import build_understanding_report
 from app.services.changes import get_project_changes
 from app.services.memory import get_memory_provider
 from app.services.projects import get_active_project, list_user_projects
@@ -21,12 +22,18 @@ async def dashboard_stats(
     active = await get_active_project(db, current_user.id)
 
     memory_count = 0
+    knowledge_gap_count = 0
     if active:
         try:
             hits = get_memory_provider(active.repo_full_name).search("")
             memory_count = len(hits) if isinstance(hits, list) else 0
         except Exception:  # noqa: BLE001
             memory_count = 0
+        try:
+            report = build_understanding_report(active.repo_full_name, active.repo_full_name)
+            knowledge_gap_count = int((report.get("counts") or {}).get("knowledge_gaps") or 0)
+        except Exception:  # noqa: BLE001
+            knowledge_gap_count = 0
 
     changes_today = 0
     if active and current_user.github_access_token:
@@ -44,6 +51,7 @@ async def dashboard_stats(
         "projects_count": len(projects),
         "active_project": active.repo_full_name if active else None,
         "memory_count": memory_count,
+        "knowledge_gap_count": knowledge_gap_count,
         "changes_today": changes_today,
         "reports_count": report_count.scalar() or 0,
     }
