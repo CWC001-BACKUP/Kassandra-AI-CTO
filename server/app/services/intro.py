@@ -125,9 +125,10 @@ def _help_response() -> str:
         "Here's how to get started:\n\n"
         "1. Connect GitHub in Settings if you haven't already.\n"
         "2. Go to Projects and add a repository.\n"
-        "3. Kassandra will analyze the repo and store findings in memory.\n"
-        "4. Open AI Chat and ask about the stack, architecture, or past decisions.\n\n"
-        "I'll only answer based on what I can verify from the repo and project memory."
+        "3. Kassandra bootstraps from the repo into Sibyl — architecture, history, and gaps.\n"
+        "4. Open Teach Kassandra to answer only the missing WHY questions.\n"
+        "5. Use AI Chat for reasoning that combines GitHub evidence with Sibyl memory.\n\n"
+        "I only answer from repository evidence and confirmed institutional memory."
     )
 
 

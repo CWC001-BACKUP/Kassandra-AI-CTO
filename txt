@@ -1,0 +1,547 @@
+CRITICAL BUG FIX: TEACH KASSANDRA MEMORY CONFIRMATION
+
+CURRENT PROBLEM
+
+The Teach Kassandra workflow currently appears to treat a user's confirmation response such as:
+
+"yes"
+
+as new source text that must be analyzed for institutional knowledge.
+
+This produces the incorrect result:
+
+"No institutional knowledge could be extracted from that statement."
+
+This is incorrect behavior.
+
+The user is not providing new institutional knowledge by saying "yes".
+
+The user is confirming that the previously generated candidate memory should be saved.
+
+CORE RULE
+
+A confirmation response must NEVER be passed into the normal institutional-memory extraction pipeline as if "yes", "save it", or "correct" were project knowledge.
+
+Instead, confirmation responses must operate on previously stored PENDING MEMORY.
+
+---
+
+## REQUIRED WORKFLOW
+
+STEP 1: ANALYZE SOURCE
+
+Kassandra receives information from one or more sources:
+
+* Developer answer
+* Conversation
+* Repository
+* Git history
+* Pull request
+* Issue
+* Documentation
+
+STEP 2: EXTRACT CANDIDATE MEMORIES
+
+The system extracts one or more structured candidate memories.
+
+Example:
+
+Candidate Memory ID:
+candidate_123
+
+Type:
+architectural_decision
+
+Decision:
+Flask REST API is a transitional prototype.
+
+Reason:
+Rapid MVP delivery and a plan to eventually move toward an event-driven architecture.
+
+Source:
+Developer answer / conversation / repository evidence
+
+Confidence:
+confirmed or inferred depending on evidence
+
+Status:
+PENDING_CONFIRMATION
+
+STEP 3: STORE CANDIDATE TEMPORARILY
+
+Before asking the user to confirm, store the candidate memory in a pending-memory store.
+
+The pending record must contain:
+
+pending_id
+project_id
+user_id
+candidate_memories
+source
+source_reference
+confidence
+created_at
+expires_at
+conversation_context
+
+IMPORTANT:
+
+Do not rely only on the previous assistant message text.
+
+The structured candidate must exist in persistent or session state so that a confirmation can reliably reference it.
+
+STEP 4: ASK FOR CONFIRMATION
+
+Example:
+
+"This sounds like useful institutional context.
+
+I extracted 3 potential memories:
+
+1. Flask REST API is a transitional architecture.
+2. Rapid MVP delivery influenced the initial API choice.
+3. The long-term direction is event-driven architecture.
+
+Would you like me to save these to Sibyl?"
+
+STEP 5: HANDLE USER RESPONSE
+
+If user says:
+
+* yes
+* save it
+* correct
+* confirm
+* that's right
+* add it
+* remember it
+
+DO NOT RUN MEMORY EXTRACTION ON THE CONFIRMATION TEXT.
+
+Instead:
+
+1. Find the active pending memory record.
+2. Validate that it belongs to the current project/user/conversation.
+3. Save the candidate memories to Sibyl.
+4. Assign permanent memory IDs.
+5. Mark them as stored.
+6. Preserve source and provenance.
+7. Clear or close the pending record.
+8. Confirm what was saved.
+
+Correct response:
+
+"Saved 3 institutional memories to Sibyl:
+
+✓ Flask REST API is a transitional architecture
+✓ Rapid MVP delivery influenced the initial architecture
+✓ Event-driven architecture is the intended future direction"
+
+If the user says NO:
+
+Discard or mark the pending candidates as rejected.
+
+If the user says:
+
+"Save only number 1 and 3"
+
+Save only those selected candidates.
+
+If the user modifies the information:
+
+Example:
+
+"Yes, but Flask was chosen because I already knew it well."
+
+Then:
+
+1. Retrieve pending memory.
+2. Merge the correction into the candidate.
+3. Recalculate the structured memory.
+4. Show or save the revised version.
+
+---
+
+## PENDING MEMORY STATE MACHINE
+
+Use an explicit state machine.
+
+DRAFT
+↓
+EXTRACTED
+↓
+PENDING_CONFIRMATION
+↓
+USER_CONFIRMED
+↓
+STORED
+
+Alternative paths:
+
+PENDING_CONFIRMATION
+↓
+USER_REJECTED
+↓
+DISCARDED
+
+PENDING_CONFIRMATION
+↓
+USER_EDITED
+↓
+UPDATED_CANDIDATE
+↓
+PENDING_CONFIRMATION
+
+Do not allow:
+
+PENDING_CONFIRMATION
+↓
+Run extraction on "yes"
+
+This is the current bug and must be prevented.
+
+---
+
+## CONFIRMATION INTENT DETECTION
+
+Before normal Teach Kassandra extraction, check whether there is an active pending memory confirmation.
+
+Pseudocode:
+
+IF active_pending_memory_exists():
+
+```
+IF user_message matches confirmation_intent:
+    save_pending_memory()
+    return save_confirmation_response
+
+IF user_message matches rejection_intent:
+    discard_pending_memory()
+    return rejection_response
+
+IF user_message selects specific memories:
+    save_selected_pending_memories()
+    return confirmation_response
+
+IF user_message contains corrections:
+    update_pending_memory()
+    return updated_candidate_response
+```
+
+ELSE:
+run_normal_memory_extraction(user_message)
+
+Examples of confirmation intent:
+
+yes
+yeah
+yep
+save it
+save them
+correct
+that's correct
+confirm
+confirmed
+add it
+remember this
+store it
+
+Examples of rejection intent:
+
+no
+don't save it
+discard it
+that's wrong
+not correct
+
+---
+
+## MULTIPLE CANDIDATE MEMORIES
+
+One analysis can generate multiple memories.
+
+Example:
+
+Developer statement:
+
+"We originally used a file-based bridge because the WebSocket connection was unreliable on some trader home networks."
+
+Possible extracted memories:
+
+Memory 1:
+Decision:
+Used file-based bridge.
+
+Reason:
+WebSocket reliability problems.
+
+Memory 2:
+Historical experiment:
+Previously implemented WebSocket bridge.
+
+Outcome:
+Persistent connections were unreliable under some network conditions.
+
+Memory 3:
+Affected component:
+External trader bridge.
+
+The confirmation should apply to the complete candidate set unless the user selects individual memories.
+
+---
+
+## SOURCE AND CONFIDENCE RULES
+
+Never mark information as CONFIRMED merely because Kassandra generated it.
+
+CONFIRMED means:
+
+A human explicitly provided or explicitly verified the information.
+
+INFERRED means:
+
+Kassandra concluded the information from evidence but has no direct human confirmation.
+
+OBSERVED means:
+
+The information is directly established by repository evidence.
+
+Example:
+
+Repository shows Flask.
+
+Memory:
+
+fact:
+Backend uses Flask.
+
+source:
+repository
+
+confidence:
+observed
+
+If Kassandra guesses:
+
+"The team chose Flask for rapid MVP delivery."
+
+Memory:
+
+fact:
+Flask may have been chosen for rapid MVP delivery.
+
+source:
+system_inference
+
+confidence:
+inferred
+
+If the developer says:
+
+"Yes, we chose Flask because we needed to ship the MVP quickly."
+
+Memory:
+
+decision:
+Flask chosen for initial API.
+
+reason:
+Rapid MVP delivery.
+
+source:
+developer
+
+confidence:
+confirmed
+
+---
+
+## CRITICAL CONSISTENCY REQUIREMENT
+
+Kassandra's displayed answer must match the actual Sibyl database.
+
+Never display:
+
+"Confirmed by institutional memory"
+
+unless the memory actually exists in Sibyl and has:
+
+source = developer or verified human source
+confidence = confirmed
+status = stored
+
+Never display:
+
+"Verified from institutional memory"
+
+when the information only came from inference.
+
+Never display a successful save confirmation unless the database write succeeded.
+
+The UI and database must agree.
+
+---
+
+## POST-SAVE VERIFICATION
+
+After saving memories, perform a read-back verification.
+
+Example:
+
+saved_memories = save_to_sibyl(candidate_memories)
+
+verified_memories = get_memories_by_ids(saved_memories.ids)
+
+IF verified_memories count != saved_memories count:
+report storage failure
+do not claim successful save
+
+ELSE:
+return success response with actual stored memory IDs/count
+
+This prevents phantom memory saves.
+
+---
+
+## RECOMMENDED DATABASE FIELDS
+
+Each permanent Sibyl memory should include:
+
+memory_id
+project_id
+type
+title
+content
+decision
+reason
+alternatives
+outcome
+source
+source_reference
+confidence
+status
+affected_components
+related_files
+related_commits
+related_prs
+created_at
+updated_at
+confirmed_at
+
+Possible status values:
+
+stored
+superseded
+rejected
+archived
+
+Possible confidence values:
+
+observed
+inferred
+confirmed
+
+Possible source values:
+
+github
+repository
+commit
+pull_request
+issue
+documentation
+developer
+conversation
+system_inference
+
+---
+
+## IMPORTANT: SEPARATE CANDIDATE FROM PERMANENT MEMORY
+
+Use two concepts:
+
+CANDIDATE MEMORY
+
+Temporary.
+Can be wrong.
+Can be edited.
+Awaiting confirmation.
+
+PERMANENT SIBYL MEMORY
+
+Stored.
+Has provenance.
+Has confidence.
+Can be retrieved by Kassandra.
+
+Do not place unconfirmed candidates into permanent institutional memory.
+
+Do not lose candidates when asking the user for confirmation.
+
+---
+
+## EXPECTED USER EXPERIENCE
+
+Developer teaches Kassandra something.
+
+↓
+
+Kassandra extracts structured knowledge.
+
+↓
+
+Kassandra says:
+
+"I found 3 pieces of institutional context. Would you like me to save them?"
+
+↓
+
+User:
+
+"Yes"
+
+↓
+
+System saves THE PREVIOUS STRUCTURED CANDIDATES.
+
+↓
+
+Kassandra:
+
+"Saved to Sibyl."
+
+↓
+
+User later asks:
+
+"What does Sibyl know?"
+
+↓
+
+The newly saved memories appear with:
+
+source
+confidence
+date
+affected components
+
+The user should never see:
+
+"No institutional knowledge could be extracted from that statement."
+
+after saying "yes" to a pending memory save request.
+
+---
+
+## FINAL RULE
+
+"YES" IS A CONTROL ACTION, NOT INSTITUTIONAL KNOWLEDGE.
+
+When there is an active pending memory confirmation:
+
+YES = SAVE THE PENDING MEMORY
+
+NO = DISCARD THE PENDING MEMORY
+
+EDIT = MODIFY THE PENDING MEMORY
+
+Only run normal memory extraction when there is no pending confirmation context.

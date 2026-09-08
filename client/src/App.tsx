@@ -16,6 +16,7 @@ import { ProjectsPage } from './pages/dashboard/ProjectsPage'
 import { LogsPage } from './pages/dashboard/LogsPage'
 import { ChangesPage } from './pages/dashboard/ChangesPage'
 import { ReportsPage } from './pages/dashboard/ReportsPage'
+import { TeachPage } from './pages/dashboard/TeachPage'
 import { SettingsPage } from './pages/dashboard/SettingsPage'
 
 export function App() {
@@ -42,6 +43,7 @@ export function App() {
             <Route index element={<DashboardHomePage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="projects" element={<ProjectsPage />} />
+            <Route path="teach" element={<TeachPage />} />
             <Route path="logs" element={<LogsPage />} />
             <Route path="changes" element={<ChangesPage />} />
             <Route path="reports" element={<ReportsPage />} />

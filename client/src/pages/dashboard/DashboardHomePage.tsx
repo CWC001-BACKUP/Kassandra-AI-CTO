@@ -10,9 +10,9 @@ import type { IconName } from '../../components/ui/FeatureIcon'
 
 const quickActions = [
   { to: '/dashboard/chat', label: 'Ask AI CTO', desc: 'Get engineering insights', icon: 'chat' as const },
+  { to: '/dashboard/teach', label: 'Teach Kassandra', desc: 'Fill institutional gaps', icon: 'reports' as const },
   { to: '/dashboard/changes', label: 'View Changes', desc: 'Recent PRs & commits', icon: 'changes' as const },
   { to: '/dashboard/reports', label: 'Generate Report', desc: 'Sprint summary', icon: 'reports' as const },
-  { to: '/dashboard/logs', label: 'Browse Logs', desc: 'System activity', icon: 'logs' as const },
 ]
 
 const activityColors: Record<string, string> = {

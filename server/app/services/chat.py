@@ -137,9 +137,13 @@ Do NOT use words like "likely" or "probably" unless you label them as inference.
 PROVENANCE AND CONFIDENCE (label internally; use plain language in replies):
 - VERIFIED facts come directly from GitHub (SHA, dates, files, diffs, parents).
 - DERIVED facts are calculated from GitHub data (e.g. file counts, set comparisons).
-- INFERRED statements are your engineering interpretation — always label them.
-- RECORDED context comes from Sibyl institutional memory — use for WHY, not WHAT changed.
+- OBSERVED institutional facts come from repository analysis stored in Sibyl.
+- INFERRED statements are engineering interpretation — always label them; never promote to fact.
+- CONFIRMED / RECORDED context comes from Sibyl institutional memory (developer-taught or prior) — use for WHY.
 - UNKNOWN means the authoritative evidence was not retrieved or does not contain the answer.
+
+Never confuse "the system does X" (observable) with "the team decided X because Y" (institutional).
+If Sibyl memory includes knowledge gaps, prefer asking targeted questions over inventing rationale.
 
 Do not confuse "I have not retrieved this yet" with "it does not exist in the repository."
 If repository facts are required, use the pre-fetched GitHub evidence below — do not rely on
@@ -259,11 +263,30 @@ def _format_memory_context(hits: list, *, sibyl_enabled: bool = True) -> str:
         return _SIBYL_DISABLED_BLOCK
     if not hits:
         return "No relevant project memory entries found."
+    from app.services.institutional_memory import format_memory_line
+
     lines: list[str] = []
-    for hit in hits[:10]:
-        content = hit.get("content") or hit.get("text") or str(hit) if isinstance(hit, dict) else str(hit)
-        lines.append(f"• {content}")
-    return "\n".join(lines)
+    for hit in hits[:12]:
+        if not isinstance(hit, dict):
+            lines.append(f"• {hit}")
+            continue
+        # Prefer structured institutional memories with explicit provenance
+        if hit.get("confidence") and (hit.get("title") or hit.get("decision")):
+            lines.append(f"• {format_memory_line(hit)}")
+            continue
+        body = hit.get("body")
+        if isinstance(body, dict) and body.get("confidence"):
+            lines.append(f"• {format_memory_line(body)}")
+            continue
+        content = hit.get("content") or hit.get("text") or hit.get("summary") or str(hit)
+        conf = hit.get("confidence")
+        prefix = f"[{str(conf).upper()}] " if conf else ""
+        lines.append(f"• {prefix}{content}")
+    return (
+        "Institutional memory from Sibyl (OBSERVED = repo evidence, "
+        "INFERRED = system inference, CONFIRMED = developer):\n"
+        + "\n".join(lines)
+    )
 
 
 def _should_search_memory(text: str) -> bool:
@@ -417,6 +440,51 @@ async def process_chat_message(
 
     tenant_id = project.repo_full_name if project else "default"
     repo_label = project.repo_full_name if project else "no project selected"
+
+    # Conversation → memory: detect candidates but never auto-store (section 15)
+    if project and sibyl_enabled:
+        from app.services.teach import candidate_confirmation_prompt, looks_like_institutional_statement
+
+        lower = text.lower().strip()
+        affirming = lower in {"yes", "y", "yeah", "yep", "please do", "record it", "save it"}
+        if affirming and history:
+            # Find last user institutional statement to confirm into Sibyl
+            prior_user = next(
+                (
+                    m["content"]
+                    for m in reversed(history)
+                    if m.get("role") == "user" and looks_like_institutional_statement(m.get("content") or "")
+                ),
+                None,
+            )
+            if prior_user:
+                from app.services.teach import teach_kassandra
+
+                teach_result = await teach_kassandra(
+                    tenant_id,
+                    prior_user,
+                    developer_name=user.full_name,
+                    project_id=project.id,
+                )
+                if teach_result.get("stored"):
+                    mem = teach_result.get("memory") or {}
+                    reply = (
+                        "Recorded in Sibyl as human-confirmed institutional memory.\n\n"
+                        f"• {mem.get('title') or 'Memory'}\n"
+                        f"Confidence: confirmed\n"
+                        f"Source: {mem.get('source') or 'developer'}"
+                    )
+                    return _result(reply, "memory", project, [mem] if mem else [], [], intent="teach_confirm")
+                reply = teach_result.get("reason") or "Could not store that memory."
+                return _result(reply, "memory", project, [], [], intent="teach_confirm")
+
+        confirm_prompt = candidate_confirmation_prompt(text)
+        if confirm_prompt and not affirming:
+            # Continue to normal answering, but append confirmation ask at the end via flag
+            pass  # handled after main reply construction below — see candidate_note
+        candidate_note = confirm_prompt
+    else:
+        candidate_note = None
 
     if is_project_name_question(text):
         if project:
@@ -1147,6 +1215,7 @@ async def process_chat_message(
         sibyl_enabled=sibyl_enabled,
         has_repo_history=bool(repo_ctx),
         has_commit_detail=bool(repo_ctx and repo_ctx.get("commit_detail")),
+        candidate_note=candidate_note,
     )
 
 
@@ -1165,6 +1234,7 @@ def _result(
     has_repo_history: bool = False,
     is_session: bool = False,
     evidence_level: EvidenceLevel | None = None,
+    candidate_note: str | None = None,
 ) -> dict:
     github_evidence = normalize_evidence(evidence)
     if sibyl_enabled and memory_hits:
@@ -1179,8 +1249,12 @@ def _result(
         is_session=is_session,
     )
 
+    final_reply = reply
+    if candidate_note and candidate_note not in final_reply:
+        final_reply = f"{final_reply.rstrip()}\n\n{candidate_note}"
+
     return {
-        "reply": reply,
+        "reply": final_reply,
         "source": source,
         "intent": intent,
         "project_id": project.id if project else None,

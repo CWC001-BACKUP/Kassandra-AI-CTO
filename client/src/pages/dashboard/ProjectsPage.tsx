@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { glassFieldClass, glassFieldDefaultClass } from '../../components/ui/surfaceStyles'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
@@ -8,11 +9,13 @@ import { Badge } from '../../components/ui/Badge'
 import { LoadingState } from '../../components/ui/LoadingState'
 import { authApi, projectsApi } from '../../services/api'
 import { useAuth } from '../../context/AuthProvider'
+import type { AnalysisResponse } from '../../types'
 
 export function ProjectsPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
+  const [lastUnderstanding, setLastUnderstanding] = useState<AnalysisResponse | null>(null)
 
   const projectsQuery = useQuery({
     queryKey: ['projects'],
@@ -51,10 +54,12 @@ export function ProjectsPage() {
 
   const analyzeMutation = useMutation({
     mutationFn: projectsApi.analyze,
-    onSuccess: () => {
+    onSuccess: (data) => {
+      setLastUnderstanding(data)
       void queryClient.invalidateQueries({ queryKey: ['projects'] })
       void queryClient.invalidateQueries({ queryKey: ['logs'] })
       void queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      void queryClient.invalidateQueries({ queryKey: ['project-understanding'] })
     },
   })
 
@@ -75,8 +80,34 @@ export function ProjectsPage() {
     <div className="min-w-0 overflow-x-hidden p-4 sm:p-6 lg:p-8">
       <PageHeader
         title="Projects"
-        description="Select GitHub repositories for Kassandra to remember and reason about"
+        description="Select GitHub repositories for Kassandra to reconstruct, then interview only on missing WHY"
       />
+
+      {lastUnderstanding?.understanding && (
+        <Card className="mb-6 border-[var(--color-cyan)]/25 p-4 sm:p-6">
+          <h2 className="text-lg font-semibold">Bootstrap complete</h2>
+          <p className="mt-2 text-sm text-[var(--color-text-muted)] whitespace-pre-wrap">
+            {lastUnderstanding.understanding.interview_intro}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3 text-xs text-[var(--color-text-dim)]">
+            <span>{lastUnderstanding.counts?.observed ?? 0} observed</span>
+            <span>{lastUnderstanding.counts?.inferred ?? 0} inferred</span>
+            <span>
+              {lastUnderstanding.counts?.knowledge_gaps ?? 0} knowledge gaps
+            </span>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link to="/dashboard/teach">
+              <Button size="sm">Teach Kassandra the gaps</Button>
+            </Link>
+            <Link to="/dashboard/chat">
+              <Button size="sm" variant="outline">
+                Open AI Chat
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {!user?.github_username && (
         <Card className="mb-6 border-[var(--color-cyan)]/30 p-4 sm:p-6">

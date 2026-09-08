@@ -1,4 +1,4 @@
-"""Automatic repository analysis via GitHub API — seeds Sibyl memory."""
+"""Automatic repository analysis via GitHub API — seeds Sibyl institutional memory."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from app.services.github import (
     get_repo_languages,
     list_root_files,
 )
+from app.services.history_bootstrap import collect_history_signals, run_bootstrap_ingestion
 from app.services.memory import get_memory_provider
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,10 @@ async def analyze_project(
     user: User,
     project: Project,
 ) -> dict:
-    """Analyze a repo through the GitHub API and store findings in memory."""
+    """Analyze a repo through the GitHub API and store findings in Sibyl memory.
+
+    Bootstrap principle: reconstruct from the repository before interviewing the developer.
+    """
     if not user.github_access_token:
         raise ValueError("GitHub not connected")
 
@@ -53,7 +57,7 @@ async def analyze_project(
         user_id=user.id,
         project_id=project.id,
         source="analysis",
-        message=f"Starting repository analysis for {repo_name}",
+        message=f"Starting institutional memory bootstrap for {repo_name}",
     )
 
     repo = await get_repo(token, repo_name)
@@ -70,6 +74,7 @@ async def analyze_project(
 
     memory = get_memory_provider(repo_name)
 
+    # Legacy overview entity (kept for existing chat/search paths)
     memory.remember(
         "architecture",
         "overview",
@@ -87,7 +92,10 @@ async def analyze_project(
         memory.set_reference("readme", readme[:12000])
 
     for filename, content in config_snippets.items():
-        memory.set_reference(filename, content)
+        # Never store env-like secrets; skip obvious secret filenames
+        if filename.lower() in {".env", ".env.local", "credentials.json"}:
+            continue
+        memory.set_reference(filename, content[:8000])
 
     branch = repo.get("default_branch") or project.default_branch or "main"
     try:
@@ -95,14 +103,38 @@ async def analyze_project(
     except Exception as exc:  # noqa: BLE001
         logger.warning("Commit preload failed for %s: %s", repo_name, exc)
 
+    history_memories, inferred_memories, history_meta = await collect_history_signals(
+        token,
+        repo_name,
+        branch=branch,
+        project_id=project.id,
+    )
+
+    understanding = run_bootstrap_ingestion(
+        tenant_id=repo_name,
+        project_id=project.id,
+        repo_full_name=repo_name,
+        languages=languages,
+        root_files=root_files,
+        config_snippets=config_snippets,
+        readme=readme,
+        history_memories=history_memories,
+        inferred_memories=inferred_memories,
+        history_meta=history_meta,
+    )
+
+    counts = understanding.get("counts") or {}
     memory.save_context(
-        inputs={"event": "repo_analysis", "repo": repo_name},
+        inputs={"event": "repo_analysis", "repo": repo_name, "phase": "bootstrap"},
         outputs={
             "summary": (
-                f"Analyzed {repo_name}: {repo.get('language') or 'unknown'} project "
-                f"with {len(root_files)} root files and {len(languages)} languages."
+                f"Bootstrapped institutional memory for {repo_name}: "
+                f"{counts.get('observed', 0)} observed, "
+                f"{counts.get('inferred', 0)} inferred, "
+                f"{counts.get('knowledge_gaps', 0)} knowledge gaps."
             ),
             "config_files": list(config_snippets.keys()),
+            "history_meta": history_meta,
         },
     )
 
@@ -136,10 +168,13 @@ async def analyze_project(
         user_id=user.id,
         project_id=project.id,
         source="analysis",
-        message=f"Repository analysis completed for {repo_name}",
+        message=f"Institutional memory bootstrap completed for {repo_name}",
         metadata={
             "languages": list(languages.keys()),
             "config_files": list(config_snippets.keys()),
+            "observed": counts.get("observed"),
+            "inferred": counts.get("inferred"),
+            "knowledge_gaps": counts.get("knowledge_gaps"),
         },
     )
 
@@ -151,4 +186,7 @@ async def analyze_project(
         "config_files": list(config_snippets.keys()),
         "readme_found": bool(readme),
         "webhook_registered": project.github_webhook_id is not None,
+        "understanding": understanding,
+        "counts": counts,
+        "history_meta": history_meta,
     }

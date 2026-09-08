@@ -6,12 +6,17 @@ from app.db.session import get_db
 from app.models import User
 from app.schemas.activity import AnalysisResponse
 from app.schemas.project import (
+    ConfirmMemoryRequest,
     CreateProjectRequest,
     GitHubRepoResponse,
     MemorySearchResponse,
     ProjectResponse,
+    ProjectUnderstandingResponse,
+    TeachRequest,
+    TeachResponse,
 )
 from app.services.github import GitHubError, list_user_repos
+from app.services.institutional_memory import build_understanding_report
 from app.services.memory import get_memory_provider
 from app.services.projects import (
     activate_project,
@@ -22,6 +27,7 @@ from app.services.projects import (
     list_user_projects,
 )
 from app.services.repo_analysis import analyze_project
+from app.services.teach import teach_kassandra
 
 router = APIRouter(tags=["projects"])
 
@@ -81,6 +87,99 @@ async def analyze_project_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AnalysisResponse(**result)
+
+
+@router.get(
+    "/projects/{project_id}/understanding",
+    response_model=ProjectUnderstandingResponse,
+)
+async def project_understanding(
+    project_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ProjectUnderstandingResponse:
+    """Bootstrap summary — what Sibyl knows, infers, and still needs from the developer."""
+    project = await get_user_project(db, current_user.id, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    report = build_understanding_report(project.repo_full_name, project.repo_full_name)
+    return ProjectUnderstandingResponse(**report)
+
+
+@router.post("/projects/{project_id}/teach", response_model=TeachResponse)
+async def teach_project(
+    project_id: str,
+    body: TeachRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TeachResponse:
+    """Teach Kassandra — store human-confirmed institutional memory in Sibyl."""
+    project = await get_user_project(db, current_user.id, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    result = await teach_kassandra(
+        project.repo_full_name,
+        body.text,
+        developer_name=current_user.full_name,
+        project_id=project.id,
+        gap_memory_id=body.gap_memory_id,
+        question=body.question,
+        extra=body.extra,
+    )
+    return TeachResponse(**result)
+
+
+@router.post("/memory/teach", response_model=TeachResponse)
+async def teach_active_project(
+    body: TeachRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TeachResponse:
+    project = None
+    if body.project_id:
+        project = await get_user_project(db, current_user.id, body.project_id)
+    if not project:
+        project = await get_active_project(db, current_user.id)
+    if not project:
+        raise HTTPException(
+            status_code=400,
+            detail="No active project. Select one under Projects.",
+        )
+    result = await teach_kassandra(
+        project.repo_full_name,
+        body.text,
+        developer_name=current_user.full_name,
+        project_id=project.id,
+        gap_memory_id=body.gap_memory_id,
+        question=body.question,
+        extra=body.extra,
+    )
+    return TeachResponse(**result)
+
+
+@router.post("/memory/confirm", response_model=TeachResponse)
+async def confirm_candidate_memory(
+    body: ConfirmMemoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> TeachResponse:
+    """Confirm a conversational candidate memory into Sibyl (avoids auto-pollution)."""
+    if not body.confirm:
+        return TeachResponse(stored=False, reason="Not confirmed — nothing stored.")
+    project = None
+    if body.project_id:
+        project = await get_user_project(db, current_user.id, body.project_id)
+    if not project:
+        project = await get_active_project(db, current_user.id)
+    if not project:
+        raise HTTPException(status_code=400, detail="No active project.")
+    result = await teach_kassandra(
+        project.repo_full_name,
+        body.text,
+        developer_name=current_user.full_name,
+        project_id=project.id,
+    )
+    return TeachResponse(**result)
 
 
 @router.post("/projects/{project_id}/activate", response_model=ProjectResponse)

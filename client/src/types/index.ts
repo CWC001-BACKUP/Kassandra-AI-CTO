@@ -200,6 +200,54 @@ export interface AnalysisResponse {
   config_files: string[]
   readme_found: boolean
   webhook_registered: boolean
+  understanding?: ProjectUnderstanding | null
+  counts?: Record<string, number> | null
+  history_meta?: Record<string, unknown> | null
+}
+
+export interface ProjectUnderstanding {
+  repo_full_name: string
+  headline: string
+  architecture: Array<{
+    title?: string | null
+    content?: string | null
+    confidence?: string | null
+  }>
+  historical_evolution: Array<{
+    title?: string | null
+    decision?: string | null
+    reason?: string | null
+    confidence?: string | null
+    source?: string | null
+  }>
+  counts: {
+    observed?: number
+    inferred?: number
+    confirmed?: number
+    knowledge_gaps?: number
+    high_priority_gaps?: number
+    stored?: number
+  }
+  knowledge_gaps: Array<{
+    memory_id?: string | null
+    question: string
+    priority?: string | null
+    affected_components?: string[]
+    reason?: string | null
+  }>
+  confidence_areas: Record<string, string>
+  interview_intro: string
+  updated_at?: string | null
+}
+
+export interface TeachResponse {
+  stored: boolean
+  reason?: string | null
+  memory?: Record<string, unknown> | null
+  conflicts: Array<Record<string, unknown>>
+  duplicate?: boolean
+  gap_resolved?: boolean
+  gaps_removed?: number
 }
 
 export interface DashboardStats {

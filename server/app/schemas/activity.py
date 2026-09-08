@@ -36,3 +36,6 @@ class AnalysisResponse(BaseModel):
     config_files: list[str]
     readme_found: bool
     webhook_registered: bool
+    understanding: dict | None = None
+    counts: dict | None = None
+    history_meta: dict | None = None

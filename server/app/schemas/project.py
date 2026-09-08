@@ -39,3 +39,39 @@ class MemorySearchResponse(BaseModel):
     tenant_id: str
     results: list[dict]
     count: int
+
+
+class TeachRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=8000)
+    project_id: str | None = None
+    gap_memory_id: str | None = None
+    question: str | None = Field(default=None, max_length=500)
+    extra: str | None = Field(default=None, max_length=4000)
+
+
+class TeachResponse(BaseModel):
+    stored: bool
+    reason: str | None = None
+    memory: dict | None = None
+    conflicts: list[dict] = Field(default_factory=list)
+    duplicate: bool = False
+    gap_resolved: bool = False
+    gaps_removed: int = 0
+
+
+class ConfirmMemoryRequest(BaseModel):
+    text: str = Field(..., min_length=8, max_length=8000)
+    project_id: str | None = None
+    confirm: bool = True
+
+
+class ProjectUnderstandingResponse(BaseModel):
+    repo_full_name: str
+    headline: str
+    architecture: list[dict]
+    historical_evolution: list[dict]
+    counts: dict
+    knowledge_gaps: list[dict]
+    confidence_areas: dict
+    interview_intro: str
+    updated_at: str | None = None

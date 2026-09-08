@@ -23,9 +23,11 @@ import type {
   MemorySearchResponse,
   MessageResponse,
   Project,
+  ProjectUnderstanding,
   RegisterRequest,
   Report,
   ResetPasswordRequest,
+  TeachResponse,
   TokenResponse,
   User,
   VerifyOtpRequest,
@@ -235,6 +237,50 @@ export const projectsApi = {
 
   analyze: (projectId: string) =>
     apiFetch<AnalysisResponse>(`/projects/${projectId}/analyze`, { method: 'POST' }),
+
+  understanding: (projectId: string) =>
+    apiFetch<ProjectUnderstanding>(`/projects/${projectId}/understanding`),
+
+  teach: (
+    projectId: string,
+    text: string,
+    opts?: { gap_memory_id?: string | null; question?: string | null; extra?: string | null },
+  ) =>
+    apiFetch<TeachResponse>(`/projects/${projectId}/teach`, {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        gap_memory_id: opts?.gap_memory_id ?? null,
+        question: opts?.question ?? null,
+        extra: opts?.extra ?? null,
+      }),
+    }),
+
+  teachActive: (
+    text: string,
+    opts?: {
+      projectId?: string | null
+      gap_memory_id?: string | null
+      question?: string | null
+      extra?: string | null
+    },
+  ) =>
+    apiFetch<TeachResponse>('/memory/teach', {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        project_id: opts?.projectId ?? null,
+        gap_memory_id: opts?.gap_memory_id ?? null,
+        question: opts?.question ?? null,
+        extra: opts?.extra ?? null,
+      }),
+    }),
+
+  confirmMemory: (text: string, projectId?: string | null) =>
+    apiFetch<TeachResponse>('/memory/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ text, project_id: projectId ?? null, confirm: true }),
+    }),
 }
 
 export const changesApi = {
