@@ -1,6 +1,6 @@
 # Kassandra — AI CTO with load-bearing Sibyl Memory
 
-> **NOTE:** For hackathon judging, a **hosted demo** (or a private env share) is preferred over committing secrets. Never put real API keys in `.env.example` — GitHub push protection will block it, and keys end up in git history. Use `server/.env` locally only (gitignored).
+> **NOTE:** For the duration of hackathon testing and judging, keys and related config are left in              `.env.example` so judges can get straight into testing. They will be deactivated afterwards.
 
 **Kassandra** is an AI CTO for engineering teams: connect a GitHub repository, ask what changed and *why* decisions were made, teach institutional context, and get answers grounded in **GitHub evidence** plus **persisted Sibyl Memory** that survives across sessions.
 
