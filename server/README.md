@@ -2,6 +2,22 @@
 
 FastAPI backend for **Kassandra** (AI CTO). Handles GitHub integration, LLM orchestration, application data (PostgreSQL), and **local-first project memory** via [Sibyl Memory](https://sibyllabs.org/).
 
+Product / hackathon overview (load-bearing map, Prior Work, demo beat): **[../README.md](../README.md)**
+
+## API documentation (Scalar)
+
+With the server running:
+
+| URL | Docs |
+|-----|------|
+| **[http://localhost:8000/scalar](http://localhost:8000/scalar)** | **Scalar** interactive API reference (primary) |
+| [http://localhost:8000/docs](http://localhost:8000/docs) | Swagger UI |
+| [http://localhost:8000/redoc](http://localhost:8000/redoc) | ReDoc |
+| [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) | OpenAPI 3 schema |
+| [http://localhost:8000/health](http://localhost:8000/health) | Health + Sibyl status |
+
+Scalar is wired in [`app/main.py`](app/main.py) via [`scalar-fastapi`](https://pypi.org/project/scalar-fastapi/).
+
 ## Requirements
 
 - Python 3.10+
@@ -16,18 +32,18 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env
-# Edit .env with your DATABASE_URL, GitHub OAuth, and LLM settings
+# Edit .env with DATABASE_URL, GitHub OAuth, JWT_SECRET, and LLM settings
 
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Health check: [http://localhost:8000/health](http://localhost:8000/health)
+Then open **[http://localhost:8000/scalar](http://localhost:8000/scalar)**.
 
-The Vite client proxies `/api` → `http://localhost:8000` in development.
+The Vite client proxies `/api` → `http://localhost:8000` in development ([`../client/vite.config.ts`](../client/vite.config.ts)).
 
 ## Environment variables
 
-Copy `.env.example` → `.env`. Key settings:
+Copy [`.env.example`](.env.example) → `.env`. Key settings:
 
 | Variable | Purpose |
 |----------|---------|
@@ -38,12 +54,27 @@ Copy `.env.example` → `.env`. Key settings:
 | `SIBYL_DATA_DIR` | Local SQLite memory files (default `./data/sibyl`) |
 | `SIBYL_CREDENTIALS` | Sibyl activation file (default `~/.sibyl-memory/credentials.json`) |
 | `SIBYL_TENANT_ID` | Optional default tenant; per-repo tenants are set in code |
+| `FRONTEND_URL` | Client origin (default `http://localhost:5173`) |
+| `JWT_SECRET` | Session signing secret |
 
 **There is no `SIBYL_API_KEY`.** Sibyl Memory is local-first; activation uses a credentials file, not an API key.
 
 ## Sibyl Memory
 
-Kassandra uses Sibyl as **load-bearing long-term memory** — architectural decisions, incidents, changes, etc. Memory is stored in **SQLite on disk**, not in a remote Sibyl API.
+Kassandra uses Sibyl as **load-bearing long-term memory** — architectural decisions, incidents, constraints, etc. Memory is stored in **SQLite on disk**, not in a remote Sibyl API.
+
+### Critical paths (where memory is written / read)
+
+| Path | File |
+|------|------|
+| Provider / tenant SQLite | [`app/services/memory.py`](app/services/memory.py) |
+| Institutional schema + gaps | [`app/services/institutional_memory.py`](app/services/institutional_memory.py) |
+| Pending confirm gate | [`app/services/pending_memory.py`](app/services/pending_memory.py) |
+| Teach orchestration | [`app/services/teach.py`](app/services/teach.py) |
+| Chat search + `sibyl_enabled` | [`app/services/chat.py`](app/services/chat.py) |
+| Evidence tags (`sibyl` vs `github`) | [`app/services/evidence.py`](app/services/evidence.py) |
+| HTTP: teach / understanding / search | [`app/api/projects.py`](app/api/projects.py) |
+| HTTP: chat | [`app/api/chat.py`](app/api/chat.py) |
 
 ### How this differs from the Sibyl website setup
 
@@ -54,7 +85,7 @@ The [Sibyl Memory Plugin setup](https://sibyllabs.org/) has four steps:
 | 1. `pip install 'sibyl-memory-cli[mcp]'` | Optional — `sibyl-memory-hermes` is already in `requirements.txt` |
 | 2. `sibyl init` | Optional — activates your Sibyl account (see below) |
 | 3. `sibyl setup` | **Not needed** — that wires IDE agents (Claude Code, Codex); we call the Python SDK from FastAPI |
-| 4. Test in your AI app | Use `/health` and the memory service in code |
+| 4. Test in your AI app | Use `/health`, `/scalar`, and chat with Sibyl on |
 
 ### You can develop without `sibyl init`
 
@@ -66,7 +97,7 @@ data/sibyl/
   owner__repo.db      # per GitHub repo (slashes → __)
 ```
 
-`/health` reports Sibyl status:
+`GET /health` reports Sibyl status:
 
 ```json
 {
@@ -84,73 +115,32 @@ data/sibyl/
 
 ### Optional: activate your Sibyl account
 
-Activation lifts tier limits and enables server-side tier verification. One-time, in your terminal:
-
 ```powershell
 pip install 'sibyl-memory-cli[mcp]'
 sibyl init
-```
-
-This opens a browser at `auth.sibyllabs.org`, signs you in (wallet or email), and writes `~/.sibyl-memory/credentials.json`.
-
-Verify:
-
-```powershell
 sibyl status
 sibyl health
 ```
 
+Opens `https://auth.sibyllabs.org`, writes `~/.sibyl-memory/credentials.json`.
+
 ### Troubleshooting `sibyl init` — `TimeoutError`
 
-If you see:
+If `sibyl init` times out reaching `https://api.sibyllabs.org/api/plugin/session-init`:
 
-```
-TimeoutError: The read operation timed out
-```
-
-during `sibyl init`, the CLI failed to reach **`https://api.sibyllabs.org/api/plugin/session-init`** within 10 seconds. Common causes:
-
-1. **Firewall / VPN / corporate proxy** blocking or slowing HTTPS to `api.sibyllabs.org`
-2. **Intermittent network** — retry on a different connection
-3. **Antivirus SSL inspection** hanging the connection
-
-**What to do:**
-
-1. **Continue without activation** — start the server; Sibyl memory still works locally (`credentials_present: false` in `/health`).
-2. **Test connectivity:**
-   ```powershell
-   curl -I https://api.sibyllabs.org
-   ```
-   You should get a response within a few seconds (403 is normal for bare requests).
-3. **Retry** `sibyl init` on another network (mobile hotspot, no VPN).
-4. **Check Windows Firewall** allows Python outbound HTTPS.
-
-Activation is optional for hackathon/dev work. Re-run `sibyl init` later when connectivity is stable.
+1. Continue without activation — local memory still works (`credentials_present: false`).
+2. Test: `curl -I https://api.sibyllabs.org` (403 on bare GET is normal).
+3. Retry without VPN / on another network.
 
 ### Using Sibyl in code
-
-Memory access is centralized in `app/services/memory.py`:
 
 ```python
 from app.services.memory import get_memory_provider
 
-# One SQLite DB per GitHub repo (tenant)
 memory = get_memory_provider("my-org/my-repo")
-
-# WARM — structured facts (decisions, architecture, constraints)
 memory.remember("architecture", "database", {"choice": "PostgreSQL", "reason": "..."})
-
-# Search across all tiers (FTS5, no embeddings)
 hits = memory.search("PostgreSQL")
-
-# Recall a specific entity
 fact = memory.recall("architecture", "database")
-
-# COLD — conversation / event journal
-memory.save_context(
-    inputs={"user": "Why PostgreSQL?"},
-    outputs={"assistant": "Because..."},
-)
 ```
 
 | AI CTO concept | Sibyl tier | SDK method |
@@ -162,78 +152,96 @@ memory.save_context(
 | Retired knowledge | ARCHIVE | `archive()` |
 | Search | FTS5 | `search()` |
 
-Docs: [docs.sibyllabs.org/memory](https://docs.sibyllabs.org/memory/) · [Integrations (SDK)](https://docs.sibyllabs.org/memory/integrations)
+Docs: [docs.sibyllabs.org/memory](https://docs.sibyllabs.org/memory/) · [Integrations](https://docs.sibyllabs.org/memory/integrations)
 
 ### Production persistence
 
-`SIBYL_DATA_DIR` must live on **persistent disk** that survives container restarts and redeploys. Do not use ephemeral filesystems for `./data/sibyl` in production.
+`SIBYL_DATA_DIR` must live on **persistent disk**. Do not use ephemeral filesystems for `./data/sibyl` in production.
 
 ## Project layout
 
 ```
 server/
 ├── app/
-│   ├── main.py              # FastAPI app factory
-│   ├── config.py            # Settings (pydantic-settings)
+│   ├── main.py                 # FastAPI + Scalar at /scalar
+│   ├── config.py               # Settings (pydantic-settings)
 │   ├── api/
 │   │   ├── router.py
-│   │   └── health.py        # GET /health
-│   └── services/
-│       └── memory.py        # Sibyl Memory wrapper
+│   │   ├── health.py           # GET /health
+│   │   ├── auth.py             # /auth/*
+│   │   ├── chat.py             # /chat (+ sibyl_enabled)
+│   │   ├── projects.py         # projects, teach, understanding, memory
+│   │   ├── dashboard.py
+│   │   ├── changes.py
+│   │   ├── logs.py
+│   │   ├── reports.py
+│   │   └── webhooks.py
+│   ├── services/
+│   │   ├── memory.py           # Sibyl Memory wrapper
+│   │   ├── institutional_memory.py
+│   │   ├── pending_memory.py
+│   │   ├── teach.py
+│   │   ├── chat.py
+│   │   ├── evidence.py
+│   │   ├── repo_context.py     # GitHub deterministic answers
+│   │   └── …
+│   ├── models/ · schemas/ · db/
 ├── tests/
 ├── scripts/
-│   ├── sibyl_simulation.py  # Compare CTO behavior with/without Sibyl
-│   └── wipe_db.py           # Wipe PostgreSQL + optional Sibyl memory
-├── data/sibyl/              # Local Sibyl SQLite (gitignored)
+│   ├── feature_scenario.py     # Live feature battery (incl. Sibyl off)
+│   └── wipe_db.py
+├── data/sibyl/                 # Local Sibyl SQLite (gitignored)
 ├── requirements.txt
 ├── .env.example
 └── README.md
 ```
 
+## API route map
+
+Prefer **Scalar** for live schemas. Summary:
+
+| Area | Prefix / paths |
+|------|----------------|
+| Health | `GET /health` |
+| Auth | `/auth/register`, `/login`, `/github`, `/me`, … |
+| Chat | `GET|POST /chat/sessions`, `POST /chat` |
+| Projects | `GET|POST /projects`, `POST .../analyze`, `.../activate` |
+| Sibyl / teach | `POST .../teach`, `GET .../understanding`, `POST .../memories/{id}/review` |
+| Memory | `POST /memory/teach`, `POST /memory/confirm`, `GET /memory/search` |
+| Dashboard | `/dashboard/stats`, `/dashboard/activity` |
+| Changes / logs / reports | `/changes`, `/logs`, `/reports` |
+| Webhooks | `POST /webhooks/github` |
+
 ## Scripts
 
 ```powershell
-# Run API with hot reload
 uvicorn app.main:app --reload --port 8000
 
-# Tests
 pytest
 
-# Sibyl CLI (optional, after pip install sibyl-memory-cli[mcp])
+# Live feature scenario (Trade Engine project in DB)
+python -m scripts.feature_scenario
+
+# Optional Sibyl CLI
 sibyl init
 sibyl status
-sibyl health
 ```
 
 ### Wipe database
 
-**Destructive** — deletes all users, projects, chat history, tokens, and reports, then recreates empty tables. Uses `DATABASE_URL` from `.env`:
-
-```env
-DATABASE_URL=postgresql://user:password@host/neondb?sslmode=require
-```
+**Destructive** — deletes app data in PostgreSQL (and optionally Sibyl `*.db` files):
 
 ```powershell
-# Preview (shows target, does not wipe)
-python -m scripts.wipe_db
-
-# Wipe PostgreSQL only
+python -m scripts.wipe_db          # preview
 python -m scripts.wipe_db --yes
-
-# Wipe PostgreSQL + local Sibyl memory (*.db under SIBYL_DATA_DIR)
 python -m scripts.wipe_db --yes --sibyl
 ```
 
-## API
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Server + Sibyl memory status |
-
-More routes (auth, chat, webhooks) are added as features land.
-
 ## Links
 
+- [Root README (hackathon)](../README.md)
 - [Sibyl Labs](https://sibyllabs.org/)
 - [Sibyl Memory docs](https://docs.sibyllabs.org/memory/)
 - [Sibyl Memory on GitHub](https://github.com/Sibyl-Labs/Sibyl-Memory)
+- [Scalar FastAPI plugin](https://scalar.com/products/api-references/integrations/fastapi)
+- [Hackathon rules](https://hack.sibyllabs.org/rules)
