@@ -107,7 +107,7 @@ Kassandra-AI-CTO/
 - Node.js **20+** (client)
 - PostgreSQL (e.g. [Neon](https://neon.tech))
 - GitHub OAuth app
-- OpenAI-compatible LLM key
+- OpenAI-compatible or OLLAMA Cloud LLM key
 
 ### 1. Server
 
