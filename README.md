@@ -54,6 +54,24 @@ Without Sibyl, Kassandra is a GitHub-aware chatbot. With Sibyl, a developer can 
 
 ---
 
+## Demo video & chat transcripts
+
+These markdown files are the **full chat transcripts** from the hackathon demo video (same project, same question set, Sibyl **On** vs **Off**).
+
+| Resource | Link |
+|----------|------|
+| **Demo video** | [Watch on YouTube](https://www.youtube.com/watch?v=REPLACE_WITH_YOUR_VIDEO_ID) ← paste your final URL |
+| Transcript — Sibyl **ON** | [`CHAT WITH SIBYL ON.md`](./CHAT%20WITH%20SIBYL%20ON.md) |
+| Transcript — Sibyl **OFF** | [`CHAT WITH SIBYL OFF.md`](./CHAT%20WITH%20SIBYL%20OFF.md) |
+| Demo project | [CWC001-lab/Emi-Tuntun](https://github.com/CWC001-lab/Emi-Tuntun) |
+
+**What judges should notice**
+
+- **ON:** teach → confirm → 13 institutional memories saved; later answers use taught *why* (clinical review policy, Go+Python split, charter).
+- **OFF:** same questions collapse to GitHub surface facts / honest “not documented in repo”; “what Sibyl knows” explicitly reports memory off.
+
+---
+
 ## Memory milestone (hackathon form answers)
 
 Copy-paste ready for the submission form. Judges score the 40% load-bearing band from this walkthrough plus a primitive below.
@@ -111,6 +129,8 @@ Multiplier: **x1.00** (Sibyl only).
 Kassandra-AI-CTO/
 ├── LICENSE                 # Apache-2.0
 ├── README.md               # This file (hackathon + product overview)
+├── CHAT WITH SIBYL ON.md   # Demo video transcript (Sibyl enabled)
+├── CHAT WITH SIBYL OFF.md  # Demo video transcript (Sibyl disabled)
 ├── client/                 # React + Vite dashboard (port 5173)
 │   ├── src/pages/dashboard/ChatPage.tsx
 │   ├── src/pages/dashboard/TeachPage.tsx
@@ -226,6 +246,9 @@ Copy [`server/.env.example`](server/.env.example) → `server/.env`.
 | Resource | URL |
 |----------|-----|
 | This repository | https://github.com/CWC001-BACKUP/Kassandra-AI-CTO |
+| Demo video | https://www.youtube.com/watch?v=REPLACE_WITH_YOUR_VIDEO_ID |
+| Chat transcript (Sibyl ON) | [CHAT WITH SIBYL ON.md](./CHAT%20WITH%20SIBYL%20ON.md) |
+| Chat transcript (Sibyl OFF) | [CHAT WITH SIBYL OFF.md](./CHAT%20WITH%20SIBYL%20OFF.md) |
 | Sibyl Labs | https://sibyllabs.org/ |
 | Sibyl Memory docs | https://docs.sibyllabs.org/memory/ |
 | Sibyl Memory GitHub | https://github.com/Sibyl-Labs/Sibyl-Memory |
