@@ -72,9 +72,8 @@ These markdown files are the **full chat transcripts** from the hackathon demo v
 
 ---
 
-## Memory milestone (hackathon form answers)
+## Memory milestone
 
-Copy-paste ready for the submission form. Judges score the 40% load-bearing band from this walkthrough plus a primitive below.
 
 ### What breaks when memory is deleted?
 
@@ -83,13 +82,13 @@ Delete / disable Sibyl and Kassandra can no longer teach, confirm, or recall ins
 **Without memory, our agent forgets…** confirmed decisions, constraints, and knowledge gaps taught by the team  
 **…and the product becomes…** a GitHub-aware chatbot with no durable institutional context.
 
-### Memory walkthrough (judges score the 40% from this)
+### Memory walkthrough
 
 - **Persist:** Confirmed institutional memories (decisions, constraints, architecture facts, knowledge gaps) via teach → human confirm → `remember()` into per-repo Sibyl SQLite (`server/data/sibyl/*.db`).
 - **Recall (fresh session):** A new empty chat calls `search()` / `recall()` on the project tenant, injects Sibyl hits into the LLM context, and surfaces Sibyl evidence chips — no prior chat history required.
 - **Changes the agent's decision by:** The answer shifts from generic/GitHub-only guidance to enforcing taught policy (e.g. “new developers must not run live EC2 isolation unlock without senior review”), including warnings and caveats that would not appear without that memory.
 
-### Memory primitives you used
+### Memory primitives used
 
 | Primitive | Used? | Where it shows up |
 |-----------|-------|-------------------|
@@ -118,7 +117,7 @@ Multiplier: **x1.00** (Sibyl only).
 ## Prior Work declaration
 
 - **Kassandra (this repo)** was built as an AI CTO product integrating GitHub + Sibyl Memory for the Sibyl Labs Hackathon build window.
-- **Prior / dependency work (not claimed as the submission invention):** FastAPI, React/Vite, PostgreSQL (Neon), GitHub OAuth API, OpenAI-compatible LLM APIs, and the open-source [Sibyl Memory](https://github.com/Sibyl-Labs/Sibyl-Memory) SDK (`sibyl-memory-hermes`).
+- **Prior / dependency work (not claimed as the submission invention):** FastAPI, React/Vite, PostgreSQL (Neon), GitHub OAuth API, OpenAI-compatible / OLLAMA LLM APIs, and the open-source [Sibyl Memory](https://github.com/Sibyl-Labs/Sibyl-Memory) SDK (`sibyl-memory-hermes`).
 - No Sibyl Labs staff reference build is reused as the product core. Institutional memory schema, pending confirmation, evidence separation, and Teach flow are original to this project.
 
 ---
