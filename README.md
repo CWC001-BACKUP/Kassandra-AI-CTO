@@ -54,6 +54,37 @@ Without Sibyl, Kassandra is a GitHub-aware chatbot. With Sibyl, a developer can 
 
 ---
 
+## Memory milestone (hackathon form answers)
+
+Copy-paste ready for the submission form. Judges score the 40% load-bearing band from this walkthrough plus a primitive below.
+
+### What breaks when memory is deleted?
+
+Delete / disable Sibyl and Kassandra can no longer teach, confirm, or recall institutional *why* across sessions — the AI-CTO claim collapses to GitHub surface facts. Commit Q&A still works; policies, constraints, and taught decisions do not.
+
+**Without memory, our agent forgets…** confirmed decisions, constraints, and knowledge gaps taught by the team  
+**…and the product becomes…** a GitHub-aware chatbot with no durable institutional context.
+
+### Memory walkthrough (judges score the 40% from this)
+
+- **Persist:** Confirmed institutional memories (decisions, constraints, architecture facts, knowledge gaps) via teach → human confirm → `remember()` into per-repo Sibyl SQLite (`server/data/sibyl/*.db`).
+- **Recall (fresh session):** A new empty chat calls `search()` / `recall()` on the project tenant, injects Sibyl hits into the LLM context, and surfaces Sibyl evidence chips — no prior chat history required.
+- **Changes the agent's decision by:** The answer shifts from generic/GitHub-only guidance to enforcing taught policy (e.g. “new developers must not run live EC2 isolation unlock without senior review”), including warnings and caveats that would not appear without that memory.
+
+### Memory primitives you used
+
+| Primitive | Used? | Where it shows up |
+|-----------|-------|-------------------|
+| **recall** | Yes | Exact `recall(category, key)` for pending confirmations, bootstrap summary, institutional facts |
+| **entities** | Yes | WARM `remember(category, key, body)` — one entity per decision / gap / fact |
+| **semantic search** | Yes | Chat + `/memory/search` use Sibyl `search()` (FTS) to retrieve relevant memories by query |
+| **temporal / time-travel** | Yes | Lifecycle (`CURRENT` / `HISTORICAL` / `DEPRECATED`) and supersede/correct flows so outdated facts stop driving answers |
+| **summarization** | Yes | Repo bootstrap writes a durable architecture/understanding summary into Sibyl |
+| **reflection** | Yes | Chat/Teach extracts candidate memories → pending queue → human yes/no before persist (reflect, then store) |
+| **consolidation** | Yes | Duplicate detection (`semantic_overlap`), fingerprint index, and supersede/reject so the store stays a single source of truth |
+
+---
+
 ## Partner stacks
 
 | Stack | Used? | Notes |
